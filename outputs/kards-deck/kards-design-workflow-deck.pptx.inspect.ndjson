@@ -1,0 +1,163 @@
+{"kind":"deck","id":"pr/0d2l2t","name":"Deck"}
+{"kind":"layout","layoutId":"b046473a-2f46-44cb-8743-25bf14c33007","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"3dd38f44-9f32-4052-b2be-7948590b0dd3","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/1n4y5f","slide":1,"title":"FRONTIER / KARDS-STYLE PROTOTYPE","textShapes":7}
+{"kind":"shape","id":"sh/4fu18jqh","slide":1,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/x0nuxc3y","slide":1,"bbox":[56,76,528,568]}
+{"kind":"shape","id":"sh/qxs72x4n","slide":1,"bbox":[56,76,6,568]}
+{"kind":"textbox","id":"sh/fil0rqd4","slide":1,"text":"FRONTIER / KARDS-STYLE PROTOTYPE","textPreview":"FRONTIER / KARDS-STYLE PROTOTYPE","textChars":32,"textLines":1,"bbox":[100,118,440,30]}
+{"kind":"textbox","id":"sh/83itgfml","slide":1,"text":"Kards Design & Workflow","textPreview":"Kards Design & Workflow","textChars":23,"textLines":1,"bbox":[100,166,430,150]}
+{"kind":"textbox","id":"sh/xobm58z2","slide":1,"text":"A Unity tabletop card-battler foundation built around clear zones, escalating Kredits, tactile board actions, and fast player feedback.","textPreview":"A Unity tabletop card-battler foundation built around clear zones, escalating Kredits, tactile board actions, and fast player feedback.","textChars":135,"textLines":1,"bbox":[100,326,432,96]}
+{"kind":"shape","id":"sh/mtwra5gb","slide":1,"bbox":[102,447,12,12]}
+{"kind":"textbox","id":"sh/fepkzupw","slide":1,"text":"Unity 2022.3 prototype","textPreview":"Unity 2022.3 prototype","textChars":22,"textLines":1,"bbox":[128,438,390,44]}
+{"kind":"shape","id":"sh/7adsji5s","slide":1,"bbox":[102,505,12,12]}
+{"kind":"textbox","id":"sh/epkzupwb","slide":1,"text":"Original assets and implementation","textPreview":"Original assets and implementation","textChars":34,"textLines":1,"bbox":[128,496,390,44]}
+{"kind":"shape","id":"sh/pg3ex0nu","slide":1,"bbox":[102,563,12,12]}
+{"kind":"textbox","id":"sh/wval87ed","slide":1,"text":"KARDS-like UX patterns, not a clone","textPreview":"KARDS-like UX patterns, not a clone","textChars":35,"textLines":1,"bbox":[128,554,390,44]}
+{"kind":"textbox","id":"sh/7mp0bi9s","slide":1,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[1130,646,64,28]}
+{"kind":"image","id":"im/yd0z6103","slide":1,"name":"","alt":"Kards Design & Workflow slide artwork","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/1n4y5f","slide":1,"text":""}
+{"kind":"slide","id":"sl/gvp6mp","slide":2,"title":"DESIGN INTENT","textShapes":7}
+{"kind":"shape","id":"sh/z61032ls","slide":2,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/al87ed8b","slide":2,"bbox":[696,76,528,568]}
+{"kind":"shape","id":"sh/h0fepkzu","slide":2,"bbox":[696,76,6,568]}
+{"kind":"textbox","id":"sh/sfil0rqd","slide":2,"text":"DESIGN INTENT","textPreview":"DESIGN INTENT","textChars":13,"textLines":1,"bbox":[740,118,440,30]}
+{"kind":"textbox","id":"sh/zupwb2hw","slide":2,"text":"Make Every Tactical Choice Visible","textPreview":"Make Every Tactical Choice Visible","textChars":34,"textLines":1,"bbox":[740,166,430,150]}
+{"kind":"textbox","id":"sh/a9w3m94f","slide":2,"text":"The prototype is organized around a small set of board truths that players can read at a glance.","textPreview":"The prototype is organized around a small set of board truths that players can read at a glance.","textChars":96,"textLines":1,"bbox":[740,306,432,96]}
+{"kind":"shape","id":"sh/hwfyxobm","slide":2,"bbox":[742,447,12,12]}
+{"kind":"textbox","id":"sh/obm58z25","slide":2,"text":"Readable card state and legal targets","textPreview":"Readable card state and legal targets","textChars":37,"textLines":1,"bbox":[768,438,390,44]}
+{"kind":"shape","id":"sh/e1w7mp0b","slide":2,"bbox":[742,505,12,12]}
+{"kind":"textbox","id":"sh/7mp0bi9s","slide":2,"text":"Physical-feeling tabletop movement","textPreview":"Physical-feeling tabletop movement","textChars":34,"textLines":1,"bbox":[768,496,390,44]}
+{"kind":"shape","id":"sh/w7mp0bi9","slide":2,"bbox":[742,563,12,12]}
+{"kind":"textbox","id":"sh/psfil0rq","slide":2,"text":"Simple feedback before deeper art polish","textPreview":"Simple feedback before deeper art polish","textChars":40,"textLines":1,"bbox":[768,554,390,44]}
+{"kind":"textbox","id":"sh/epkzupwb","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1130,646,64,28]}
+{"kind":"image","id":"im/d8v6psfi","slide":2,"name":"","alt":"Make Every Tactical Choice Visible slide artwork","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/gvp6mp","slide":2,"text":""}
+{"kind":"slide","id":"sl/4q2vez","slide":3,"title":"BOARD MODEL","textShapes":7}
+{"kind":"shape","id":"sh/9s36hcrm","slide":3,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/g7adsji5","slide":3,"bbox":[56,76,528,568]}
+{"kind":"shape","id":"sh/rytsvu9k","slide":3,"bbox":[56,76,6,568]}
+{"kind":"textbox","id":"sh/yd0z6103","slide":3,"text":"BOARD MODEL","textPreview":"BOARD MODEL","textChars":11,"textLines":1,"bbox":[100,118,440,30]}
+{"kind":"textbox","id":"sh/90je9cvi","slide":3,"text":"Three Rows, Two Headquarters","textPreview":"Three Rows, Two Headquarters","textChars":28,"textLines":1,"bbox":[100,166,430,150]}
+{"kind":"textbox","id":"sh/gfmlkjm1","slide":3,"text":"Runtime board generation creates enemy support, frontline, and player support rows around opposing HQs.","textPreview":"Runtime board generation creates enemy support, frontline, and player support rows around opposing HQs.","textChars":103,"textLines":1,"bbox":[100,306,432,96]}
+{"kind":"shape","id":"sh/r65wjudg","slide":3,"bbox":[102,447,12,12]}
+{"kind":"textbox","id":"sh/ylc7u54z","slide":3,"text":"Support rows stage deployed units","textPreview":"Support rows stage deployed units","textChars":33,"textLines":1,"bbox":[128,438,390,44]}
+{"kind":"shape","id":"sh/g7adsji5","slide":3,"bbox":[102,505,12,12]}
+{"kind":"textbox","id":"sh/9s36hcrm","slide":3,"text":"Frontline controls pressure and attacks","textPreview":"Frontline controls pressure and attacks","textChars":39,"textLines":1,"bbox":[128,496,390,44]}
+{"kind":"shape","id":"sh/y1kre1w7","slide":3,"bbox":[102,563,12,12]}
+{"kind":"textbox","id":"sh/rmhk3q5o","slide":3,"text":"HQ health defines win and loss states","textPreview":"HQ health defines win and loss states","textChars":37,"textLines":1,"bbox":[128,554,390,44]}
+{"kind":"textbox","id":"sh/gfmlkjm1","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1130,646,64,28]}
+{"kind":"image","id":"im/3m94fu18","slide":3,"name":"","alt":"Three Rows, Two Headquarters slide artwork","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/4q2vez","slide":3,"text":""}
+{"kind":"slide","id":"sl/3dioix","slide":4,"title":"RESOURCES & ZONES","textShapes":7}
+{"kind":"shape","id":"sh/z25kb6xk","slide":4,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/6hcrmhk3","slide":4,"bbox":[56,76,528,568]}
+{"kind":"shape","id":"sh/dg7adsji","slide":4,"bbox":[56,76,6,568]}
+{"kind":"textbox","id":"sh/ovahoza1","slide":4,"text":"RESOURCES & ZONES","textPreview":"RESOURCES & ZONES","textChars":17,"textLines":1,"bbox":[100,118,440,30]}
+{"kind":"textbox","id":"sh/vahoza1g","slide":4,"text":"Cards Move Through a Small State Machine","textPreview":"Cards Move Through a Small State Machine","textChars":40,"textLines":1,"bbox":[100,166,430,150]}
+{"kind":"textbox","id":"sh/6tovahoz","slide":4,"text":"Deck, hand, board, countermeasures, and discard are backed by runtime card state and escalating Kredits.","textPreview":"Deck, hand, board, countermeasures, and discard are backed by runtime card state and escalating Kredits.","textChars":104,"textLines":1,"bbox":[100,306,432,96]}
+{"kind":"shape","id":"sh/dsji5sne","slide":4,"bbox":[102,447,12,12]}
+{"kind":"textbox","id":"sh/o7qpg3ex","slide":4,"text":"CardData becomes RuntimeCard","textPreview":"CardData becomes RuntimeCard","textChars":28,"textLines":1,"bbox":[128,438,390,44]}
+{"kind":"shape","id":"sh/q5o7qpg3","slide":4,"bbox":[102,505,12,12]}
+{"kind":"textbox","id":"sh/jqh0fepk","slide":4,"text":"Kredits gate deploy and operation costs","textPreview":"Kredits gate deploy and operation costs","textChars":39,"textLines":1,"bbox":[128,496,390,44]}
+{"kind":"shape","id":"sh/8bat47y1","slide":4,"bbox":[102,563,12,12]}
+{"kind":"textbox","id":"sh/1w7mp0bi","slide":4,"text":"Deck, hand, discard, board, and set traps","textPreview":"Deck, hand, discard, board, and set traps","textChars":41,"textLines":1,"bbox":[128,554,390,44]}
+{"kind":"textbox","id":"sh/qh0fepkz","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1130,646,64,28]}
+{"kind":"image","id":"im/1orytsvu","slide":4,"name":"","alt":"Cards Move Through a Small State Machine slide artwork","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/3dioix","slide":4,"text":""}
+{"kind":"slide","id":"sl/nzlja5","slide":5,"title":"MATCH FLOW","textShapes":7}
+{"kind":"shape","id":"sh/psfil0rq","slide":5,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/w7mp0bi9","slide":5,"bbox":[696,76,528,568]}
+{"kind":"shape","id":"sh/7adsji5s","slide":5,"bbox":[696,76,6,568]}
+{"kind":"textbox","id":"sh/epkzupwb","slide":5,"text":"MATCH FLOW","textPreview":"MATCH FLOW","textChars":10,"textLines":1,"bbox":[740,118,440,30]}
+{"kind":"textbox","id":"sh/pg3ex0nu","slide":5,"text":"From Starter Deck to End Turn Loop","textPreview":"From Starter Deck to End Turn Loop","textChars":34,"textLines":1,"bbox":[740,166,430,150]}
+{"kind":"textbox","id":"sh/wval87ed","slide":5,"text":"The current flow starts with deck choice, runs a mulligan, then cycles draw, refresh, action, enemy AI, and game-over checks.","textPreview":"The current flow starts with deck choice, runs a mulligan, then cycles draw, refresh, action, enemy AI, and game-over checks.","textChars":125,"textLines":1,"bbox":[740,306,432,96]}
+{"kind":"shape","id":"sh/36hcrmhk","slide":5,"bbox":[742,447,12,12]}
+{"kind":"textbox","id":"sh/eloj2t83","slide":5,"text":"Choose starter deck","textPreview":"Choose starter deck","textChars":19,"textLines":1,"bbox":[768,438,390,44]}
+{"kind":"shape","id":"sh/wra5gbq1","slide":5,"bbox":[742,505,12,12]}
+{"kind":"textbox","id":"sh/lc7u54zi","slide":5,"text":"Keep or mulligan opening hand","textPreview":"Keep or mulligan opening hand","textChars":29,"textLines":1,"bbox":[768,496,390,44]}
+{"kind":"shape","id":"sh/eloj2t83","slide":5,"bbox":[742,563,12,12]}
+{"kind":"textbox","id":"sh/36hcrmhk","slide":5,"text":"Act, end turn, resolve enemy response","textPreview":"Act, end turn, resolve enemy response","textChars":37,"textLines":1,"bbox":[768,554,390,44]}
+{"kind":"textbox","id":"sh/wfyxobm5","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1130,646,64,28]}
+{"kind":"image","id":"im/nih4byhg","slide":5,"name":"","alt":"From Starter Deck to End Turn Loop slide artwork","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/nzlja5","slide":5,"text":""}
+{"kind":"slide","id":"sl/kg0sfy","slide":6,"title":"PLAYER WORKFLOW","textShapes":7}
+{"kind":"shape","id":"sh/za1gvy90","slide":6,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/ap4r65wj","slide":6,"bbox":[56,76,528,568]}
+{"kind":"shape","id":"sh/hoza1gvy","slide":6,"bbox":[56,76,6,568]}
+{"kind":"textbox","id":"sh/s36hcrmh","slide":6,"text":"PLAYER WORKFLOW","textPreview":"PLAYER WORKFLOW","textChars":15,"textLines":1,"bbox":[100,118,440,30]}
+{"kind":"textbox","id":"sh/zidonyd0","slide":6,"text":"Select or Drag, Then Commit","textPreview":"Select or Drag, Then Commit","textChars":27,"textLines":1,"bbox":[100,166,430,150]}
+{"kind":"textbox","id":"sh/a1gvy90j","slide":6,"text":"The interaction model supports click and drag flows for units, orders, and countermeasures.","textPreview":"The interaction model supports click and drag flows for units, orders, and countermeasures.","textChars":91,"textLines":1,"bbox":[100,306,432,96]}
+{"kind":"shape","id":"sh/lszqtcj6","slide":6,"bbox":[102,447,12,12]}
+{"kind":"textbox","id":"sh/s72x4nap","slide":6,"text":"Units deploy to highlighted support slots","textPreview":"Units deploy to highlighted support slots","textChars":41,"textLines":1,"bbox":[128,438,390,44]}
+{"kind":"shape","id":"sh/idonyd0z","slide":6,"bbox":[102,505,12,12]}
+{"kind":"textbox","id":"sh/byhgn29g","slide":6,"text":"Orders resolve on legal targets or board slots","textPreview":"Orders resolve on legal targets or board slots","textChars":46,"textLines":1,"bbox":[128,496,390,44]}
+{"kind":"shape","id":"sh/0je9cvix","slide":6,"bbox":[102,563,12,12]}
+{"kind":"textbox","id":"sh/t47y1kre","slide":6,"text":"Countermeasures set face-down for later triggers","textPreview":"Countermeasures set face-down for later triggers","textChars":48,"textLines":1,"bbox":[128,554,390,44]}
+{"kind":"textbox","id":"sh/il0rqd4v","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1130,646,64,28]}
+{"kind":"image","id":"im/tsvu9kni","slide":6,"name":"","alt":"Select or Drag, Then Commit slide artwork","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/kg0sfy","slide":6,"text":""}
+{"kind":"slide","id":"sl/edla0v","slide":7,"title":"FRONTLINE WORKFLOW","textShapes":7}
+{"kind":"shape","id":"sh/dsji5sne","slide":7,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/o7qpg3ex","slide":7,"bbox":[696,76,528,568]}
+{"kind":"shape","id":"sh/vy90je9c","slide":7,"bbox":[696,76,6,568]}
+{"kind":"textbox","id":"sh/6dcbulwv","slide":7,"text":"FRONTLINE WORKFLOW","textPreview":"FRONTLINE WORKFLOW","textChars":18,"textLines":1,"bbox":[740,118,440,30]}
+{"kind":"textbox","id":"sh/d4vmtwra","slide":7,"text":"Advance Units to Create Pressure","textPreview":"Advance Units to Create Pressure","textChars":32,"textLines":1,"bbox":[740,166,430,150]}
+{"kind":"textbox","id":"sh/oj2t83it","slide":7,"text":"Support units spend operation cost to move forward, while frontline control limits when new units can advance.","textPreview":"Support units spend operation cost to move forward, while frontline control limits when new units can advance.","textChars":110,"textLines":1,"bbox":[740,306,432,96]}
+{"kind":"shape","id":"sh/z25kb6xk","slide":7,"bbox":[742,447,12,12]}
+{"kind":"textbox","id":"sh/6hcrmhk3","slide":7,"text":"Move from support to empty frontline slots","textPreview":"Move from support to empty frontline slots","textChars":42,"textLines":1,"bbox":[768,438,390,44]}
+{"kind":"shape","id":"sh/gr2p8nqx","slide":7,"bbox":[742,505,12,12]}
+{"kind":"textbox","id":"sh/9cvixcze","slide":7,"text":"Control rules prevent free reinforcement","textPreview":"Control rules prevent free reinforcement","textChars":40,"textLines":1,"bbox":[768,496,390,44]}
+{"kind":"shape","id":"sh/ylc7u54z","slide":7,"bbox":[742,563,12,12]}
+{"kind":"textbox","id":"sh/r65wjudg","slide":7,"text":"Pinned and other states shape timing","textPreview":"Pinned and other states shape timing","textChars":36,"textLines":1,"bbox":[768,554,390,44]}
+{"kind":"textbox","id":"sh/g3ex0nux","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1130,646,64,28]}
+{"kind":"image","id":"im/bm58z25k","slide":7,"name":"","alt":"Advance Units to Create Pressure slide artwork","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/edla0v","slide":7,"text":""}
+{"kind":"slide","id":"sl/8nj4wh","slide":8,"title":"COMBAT RESOLUTION","textShapes":7}
+{"kind":"shape","id":"sh/orytsvu9","slide":8,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/hcrmhk3q","slide":8,"bbox":[696,76,528,568]}
+{"kind":"shape","id":"sh/a9w3m94f","slide":8,"bbox":[696,76,6,568]}
+{"kind":"textbox","id":"sh/zupwb2hw","slide":8,"text":"COMBAT RESOLUTION","textPreview":"COMBAT RESOLUTION","textChars":17,"textLines":1,"bbox":[740,118,440,30]}
+{"kind":"textbox","id":"sh/sfil0rqd","slide":8,"text":"Attack Units, Break HQ, Trigger Traps","textPreview":"Attack Units, Break HQ, Trigger Traps","textChars":37,"textLines":1,"bbox":[740,166,430,150]}
+{"kind":"textbox","id":"sh/h0fepkzu","slide":8,"text":"Frontline units attack enemy support units or the enemy HQ, with guard restrictions and countermeasure reactions.","textPreview":"Frontline units attack enemy support units or the enemy HQ, with guard restrictions and countermeasure reactions.","textChars":113,"textLines":1,"bbox":[740,336,432,96]}
+{"kind":"shape","id":"sh/65wjudg7","slide":8,"bbox":[742,447,12,12]}
+{"kind":"textbox","id":"sh/zqtcj6to","slide":8,"text":"Damage, repair, buffs, draw, and pin effects","textPreview":"Damage, repair, buffs, draw, and pin effects","textChars":44,"textLines":1,"bbox":[768,438,390,44]}
+{"kind":"shape","id":"sh/zupwb2hw","slide":8,"bbox":[742,505,12,12]}
+{"kind":"textbox","id":"sh/a9w3m94f","slide":8,"text":"Keywords include Blitz, Guard, Fury, Smokescreen, Pinned","textPreview":"Keywords include Blitz, Guard, Fury, Smokescreen, Pinned","textChars":56,"textLines":1,"bbox":[768,496,390,44]}
+{"kind":"shape","id":"sh/h0fepkzu","slide":8,"bbox":[742,563,12,12]}
+{"kind":"textbox","id":"sh/sfil0rqd","slide":8,"text":"Victory, defeat, and draw states are explicit","textPreview":"Victory, defeat, and draw states are explicit","textChars":45,"textLines":1,"bbox":[768,554,390,44]}
+{"kind":"textbox","id":"sh/z61032ls","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1130,646,64,28]}
+{"kind":"image","id":"im/ahoza1gv","slide":8,"name":"","alt":"Attack Units, Break HQ, Trigger Traps slide artwork","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/8nj4wh","slide":8,"text":""}
+{"kind":"slide","id":"sl/vbuleh","slide":9,"title":"IMPLEMENTATION SHAPE","textShapes":7}
+{"kind":"shape","id":"sh/lwval87e","slide":9,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/wb2hwfyx","slide":9,"bbox":[56,76,528,568]}
+{"kind":"shape","id":"sh/3itgfmlk","slide":9,"bbox":[56,76,6,568]}
+{"kind":"textbox","id":"sh/ex0nuxc3","slide":9,"text":"IMPLEMENTATION SHAPE","textPreview":"IMPLEMENTATION SHAPE","textChars":20,"textLines":1,"bbox":[100,118,440,30]}
+{"kind":"textbox","id":"sh/loj2t83i","slide":9,"text":"Lean Runtime Layers Keep the Prototype Movable","textPreview":"Lean Runtime Layers Keep the Prototype Movable","textChars":46,"textLines":1,"bbox":[100,166,430,150]}
+{"kind":"textbox","id":"sh/w3m94fu1","slide":9,"text":"The code separates card definitions, runtime state, board slots, card visuals, and the main turn controller.","textPreview":"The code separates card definitions, runtime state, board slots, card visuals, and the main turn controller.","textChars":108,"textLines":1,"bbox":[100,306,432,96]}
+{"kind":"shape","id":"sh/3ex0nuxc","slide":9,"bbox":[102,447,12,12]}
+{"kind":"textbox","id":"sh/at47y1kr","slide":9,"text":"CardData and starter deck archetypes define content","textPreview":"CardData and starter deck archetypes define content","textChars":51,"textLines":1,"bbox":[128,438,390,44]}
+{"kind":"shape","id":"sh/knih4byh","slide":9,"bbox":[102,505,12,12]}
+{"kind":"textbox","id":"sh/d8bat47y","slide":9,"text":"GameController coordinates phases, actions, AI, and status","textPreview":"GameController coordinates phases, actions, AI, and status","textChars":58,"textLines":1,"bbox":[128,496,390,44]}
+{"kind":"shape","id":"sh/2lszqtcj","slide":9,"bbox":[102,563,12,12]}
+{"kind":"textbox","id":"sh/v6psfil0","slide":9,"text":"BoardManager, SlotInteract, and CardView drive tabletop feedback","textPreview":"BoardManager, SlotInteract, and CardView drive tabletop feedback","textChars":64,"textLines":1,"bbox":[128,554,390,44]}
+{"kind":"textbox","id":"sh/kf6dcbul","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1130,646,64,28]}
+{"kind":"image","id":"im/z25kb6xk","slide":9,"name":"","alt":"Lean Runtime Layers Keep the Prototype Movable slide artwork","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/vbuleh","slide":9,"text":""}
+{"kind":"slide","id":"sl/vi84i1","slide":10,"title":"NEXT TARGETS","textShapes":7}
+{"kind":"shape","id":"sh/czed8v6p","slide":10,"bbox":[0,0,1280,720]}
+{"kind":"shape","id":"sh/5kb6xkf6","slide":10,"bbox":[56,76,528,568]}
+{"kind":"shape","id":"sh/u54zidon","slide":10,"bbox":[56,76,6,568]}
+{"kind":"textbox","id":"sh/nqxs72x4","slide":10,"text":"NEXT TARGETS","textPreview":"NEXT TARGETS","textChars":12,"textLines":1,"bbox":[100,118,440,30]}
+{"kind":"textbox","id":"sh/cbulwval","slide":10,"text":"Polish the Surface, Deepen the System","textPreview":"Polish the Surface, Deepen the System","textChars":37,"textLines":1,"bbox":[100,166,430,150]}
+{"kind":"textbox","id":"sh/5sneloj2","slide":10,"text":"The roadmap moves from placeholder visuals and broad mechanics toward a richer card-game product loop.","textPreview":"The roadmap moves from placeholder visuals and broad mechanics toward a richer card-game product loop.","textChars":102,"textLines":1,"bbox":[100,306,432,96]}
+{"kind":"shape","id":"sh/y90je9cv","slide":10,"bbox":[102,447,12,12]}
+{"kind":"textbox","id":"sh/nuxc3ylc","slide":10,"text":"World-space card prefabs and animated drag previews","textPreview":"World-space card prefabs and animated drag previews","textChars":51,"textLines":1,"bbox":[128,438,390,44]}
+{"kind":"shape","id":"sh/36hcrmhk","slide":10,"bbox":[102,505,12,12]}
+{"kind":"textbox","id":"sh/eloj2t83","slide":10,"text":"Expanded timing windows, keywords, nations, and targeting","textPreview":"Expanded timing windows, keywords, nations, and targeting","textChars":57,"textLines":1,"bbox":[128,496,390,44]}
+{"kind":"shape","id":"sh/lc7u54zi","slide":10,"bbox":[102,563,12,12]}
+{"kind":"textbox","id":"sh/wra5gbq1","slide":10,"text":"Deck builder, collection data, VFX, sound, and state panels","textPreview":"Deck builder, collection data, VFX, sound, and state panels","textChars":59,"textLines":1,"bbox":[128,554,390,44]}
+{"kind":"textbox","id":"sh/7u54zido","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1130,646,64,28]}
+{"kind":"image","id":"im/qd4vmtwr","slide":10,"name":"","alt":"Polish the Surface, Deepen the System slide artwork","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/vi84i1","slide":10,"text":""}

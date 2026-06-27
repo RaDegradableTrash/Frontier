@@ -1,0 +1,609 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/gvp6mp",
+    "id": "gvp6mp",
+    "slide": 2,
+    "layoutId": "3dd38f44-9f32-4052-b2be-7948590b0dd3",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "b046473a-2f46-44cb-8743-25bf14c33007",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#020713",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "+mn-lt"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "3dd38f44-9f32-4052-b2be-7948590b0dd3",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "b046473a-2f46-44cb-8743-25bf14c33007",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "b046473a-2f46-44cb-8743-25bf14c33007",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/d8v6psfi",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "alt": "Make Every Tactical Choice Visible slide artwork",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "asset": {
+        "assetId": "41ac8bb3-9f79-49fb-a3d1-0e5dbcc77f8a",
+        "contentType": "image/png",
+        "byteLength": 2143304
+      }
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/z61032ls",
+      "id": "2",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/al87ed8b",
+      "id": "3",
+      "bbox": [
+        696,
+        76,
+        528,
+        568
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(6, 16, 29, 0.76)",
+      "lineColor": "rgba(212, 175, 55, 0.32)",
+      "lineWidth": 1
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/h0fepkzu",
+      "id": "4",
+      "bbox": [
+        696,
+        76,
+        6,
+        568
+      ],
+      "geometry": "rect",
+      "fillColor": "#D4AF37",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/sfil0rqd",
+      "id": "5",
+      "bbox": [
+        740,
+        118,
+        440,
+        30
+      ],
+      "geometry": "rect",
+      "text": "DESIGN INTENT",
+      "textPreview": "DESIGN INTENT",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "fontSize": 15,
+        "typeface": "+mn-lt",
+        "color": "#D4AF37",
+        "bold": true,
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "DESIGN INTENT"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "DESIGN INTENT",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "color": "#D4AF37",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "DESIGN INTENT",
+              "fontSize": 15,
+              "color": "#D4AF37",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zupwb2hw",
+      "id": "6",
+      "bbox": [
+        740,
+        166,
+        430,
+        150
+      ],
+      "geometry": "rect",
+      "text": "Make Every Tactical Choice Visible",
+      "textPreview": "Make Every Tactical Choice Visible",
+      "resolvedFontSize": 42,
+      "resolvedTextStyle": {
+        "fontSize": 42,
+        "typeface": "+mn-lt",
+        "color": "#F8FAFC",
+        "bold": true,
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Make Every Tactical"
+          },
+          {
+            "index": 2,
+            "text": "Choice Visible"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Make Every Tactical Choice Visible",
+          "resolvedTextStyle": {
+            "fontSize": 42,
+            "color": "#F8FAFC",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Make Every Tactical Choice Visible",
+              "fontSize": 42,
+              "color": "#F8FAFC",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/a9w3m94f",
+      "id": "7",
+      "bbox": [
+        740,
+        306,
+        432,
+        96
+      ],
+      "geometry": "rect",
+      "text": "The prototype is organized around a small set of board truths that players can read at a glance.",
+      "textPreview": "The prototype is organized around a small set of board truths that players can read at a glance.",
+      "resolvedFontSize": 21,
+      "resolvedTextStyle": {
+        "fontSize": 21,
+        "typeface": "+mn-lt",
+        "color": "#DBE5F0",
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The prototype is organized around a small"
+          },
+          {
+            "index": 2,
+            "text": "set of board truths that players can read at"
+          },
+          {
+            "index": 3,
+            "text": "a glance."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The prototype is organized around a small set of board truths that players can read at a glance.",
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "color": "#DBE5F0"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "The prototype is organized around a small set of board truths that players can read at a glance.",
+              "fontSize": 21,
+              "color": "#DBE5F0"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hwfyxobm",
+      "id": "8",
+      "bbox": [
+        742,
+        447,
+        12,
+        12
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#52D1FF",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/obm58z25",
+      "id": "9",
+      "bbox": [
+        768,
+        438,
+        390,
+        44
+      ],
+      "geometry": "rect",
+      "text": "Readable card state and legal targets",
+      "textPreview": "Readable card state and legal targets",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#F1F5F9",
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Readable card state and legal targets"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Readable card state and legal targets",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#F1F5F9"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Readable card state and legal targets",
+              "fontSize": 18,
+              "color": "#F1F5F9"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/e1w7mp0b",
+      "id": "10",
+      "bbox": [
+        742,
+        505,
+        12,
+        12
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#D4AF37",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7mp0bi9s",
+      "id": "11",
+      "bbox": [
+        768,
+        496,
+        390,
+        44
+      ],
+      "geometry": "rect",
+      "text": "Physical-feeling tabletop movement",
+      "textPreview": "Physical-feeling tabletop movement",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#F1F5F9",
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Physical-feeling tabletop movement"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Physical-feeling tabletop movement",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#F1F5F9"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Physical-feeling tabletop movement",
+              "fontSize": 18,
+              "color": "#F1F5F9"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/w7mp0bi9",
+      "id": "12",
+      "bbox": [
+        742,
+        563,
+        12,
+        12
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#D4AF37",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/psfil0rq",
+      "id": "13",
+      "bbox": [
+        768,
+        554,
+        390,
+        44
+      ],
+      "geometry": "rect",
+      "text": "Simple feedback before deeper art polish",
+      "textPreview": "Simple feedback before deeper art polish",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#F1F5F9",
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Simple feedback before deeper art polish"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Simple feedback before deeper art polish",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#F1F5F9"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Simple feedback before deeper art polish",
+              "fontSize": 18,
+              "color": "#F1F5F9"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/epkzupwb",
+      "id": "14",
+      "bbox": [
+        1130,
+        646,
+        64,
+        28
+      ],
+      "geometry": "rect",
+      "text": "02",
+      "textPreview": "02",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "fontSize": 16,
+        "typeface": "+mn-lt",
+        "color": "#D4AF37",
+        "bold": true,
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "02"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "02",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "color": "#D4AF37",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "02",
+              "fontSize": 16,
+              "color": "#D4AF37",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

@@ -1,0 +1,625 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/vbuleh",
+    "id": "vbuleh",
+    "slide": 9,
+    "layoutId": "3dd38f44-9f32-4052-b2be-7948590b0dd3",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "b046473a-2f46-44cb-8743-25bf14c33007",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#020713",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "+mn-lt"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "3dd38f44-9f32-4052-b2be-7948590b0dd3",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "b046473a-2f46-44cb-8743-25bf14c33007",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "b046473a-2f46-44cb-8743-25bf14c33007",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/z25kb6xk",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "alt": "Lean Runtime Layers Keep the Prototype Movable slide artwork",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "asset": {
+        "assetId": "b5a09a85-8e34-4e2b-aee4-3fbd94ef2347",
+        "contentType": "image/png",
+        "byteLength": 1886196
+      }
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lwval87e",
+      "id": "2",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wb2hwfyx",
+      "id": "3",
+      "bbox": [
+        56,
+        76,
+        528,
+        568
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(6, 16, 29, 0.76)",
+      "lineColor": "rgba(212, 175, 55, 0.32)",
+      "lineWidth": 1
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3itgfmlk",
+      "id": "4",
+      "bbox": [
+        56,
+        76,
+        6,
+        568
+      ],
+      "geometry": "rect",
+      "fillColor": "#D4AF37",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ex0nuxc3",
+      "id": "5",
+      "bbox": [
+        100,
+        118,
+        440,
+        30
+      ],
+      "geometry": "rect",
+      "text": "IMPLEMENTATION SHAPE",
+      "textPreview": "IMPLEMENTATION SHAPE",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "fontSize": 15,
+        "typeface": "+mn-lt",
+        "color": "#D4AF37",
+        "bold": true,
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "IMPLEMENTATION SHAPE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "IMPLEMENTATION SHAPE",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "color": "#D4AF37",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "IMPLEMENTATION SHAPE",
+              "fontSize": 15,
+              "color": "#D4AF37",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/loj2t83i",
+      "id": "6",
+      "bbox": [
+        100,
+        166,
+        430,
+        150
+      ],
+      "geometry": "rect",
+      "text": "Lean Runtime Layers Keep the Prototype Movable",
+      "textPreview": "Lean Runtime Layers Keep the Prototype Movable",
+      "resolvedFontSize": 42,
+      "resolvedTextStyle": {
+        "fontSize": 42,
+        "typeface": "+mn-lt",
+        "color": "#F8FAFC",
+        "bold": true,
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Lean Runtime Layers"
+          },
+          {
+            "index": 2,
+            "text": "Keep the Prototype"
+          },
+          {
+            "index": 3,
+            "text": "Movable"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Lean Runtime Layers Keep the Prototype Movable",
+          "resolvedTextStyle": {
+            "fontSize": 42,
+            "color": "#F8FAFC",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Lean Runtime Layers Keep the Prototype Movable",
+              "fontSize": 42,
+              "color": "#F8FAFC",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/w3m94fu1",
+      "id": "7",
+      "bbox": [
+        100,
+        306,
+        432,
+        96
+      ],
+      "geometry": "rect",
+      "text": "The code separates card definitions, runtime state, board slots, card visuals, and the main turn controller.",
+      "textPreview": "The code separates card definitions, runtime state, board slots, card visuals, and the main turn controller.",
+      "resolvedFontSize": 21,
+      "resolvedTextStyle": {
+        "fontSize": 21,
+        "typeface": "+mn-lt",
+        "color": "#DBE5F0",
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The code separates card definitions,"
+          },
+          {
+            "index": 2,
+            "text": "runtime state, board slots, card visuals, and"
+          },
+          {
+            "index": 3,
+            "text": "the main turn controller."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The code separates card definitions, runtime state, board slots, card visuals, and the main turn controller.",
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "color": "#DBE5F0"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "The code separates card definitions, runtime state, board slots, card visuals, and the main turn controller.",
+              "fontSize": 21,
+              "color": "#DBE5F0"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3ex0nuxc",
+      "id": "8",
+      "bbox": [
+        102,
+        447,
+        12,
+        12
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#52D1FF",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/at47y1kr",
+      "id": "9",
+      "bbox": [
+        128,
+        438,
+        390,
+        44
+      ],
+      "geometry": "rect",
+      "text": "CardData and starter deck archetypes define content",
+      "textPreview": "CardData and starter deck archetypes define content",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#F1F5F9",
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "CardData and starter deck archetypes define"
+          },
+          {
+            "index": 2,
+            "text": "content"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "CardData and starter deck archetypes define content",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#F1F5F9"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "CardData and starter deck archetypes define content",
+              "fontSize": 18,
+              "color": "#F1F5F9"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/knih4byh",
+      "id": "10",
+      "bbox": [
+        102,
+        505,
+        12,
+        12
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#D4AF37",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/d8bat47y",
+      "id": "11",
+      "bbox": [
+        128,
+        496,
+        390,
+        44
+      ],
+      "geometry": "rect",
+      "text": "GameController coordinates phases, actions, AI, and status",
+      "textPreview": "GameController coordinates phases, actions, AI, and status",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#F1F5F9",
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "GameController coordinates phases, actions,"
+          },
+          {
+            "index": 2,
+            "text": "AI, and status"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "GameController coordinates phases, actions, AI, and status",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#F1F5F9"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "GameController coordinates phases, actions, AI, and status",
+              "fontSize": 18,
+              "color": "#F1F5F9"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2lszqtcj",
+      "id": "12",
+      "bbox": [
+        102,
+        563,
+        12,
+        12
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#D4AF37",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/v6psfil0",
+      "id": "13",
+      "bbox": [
+        128,
+        554,
+        390,
+        44
+      ],
+      "geometry": "rect",
+      "text": "BoardManager, SlotInteract, and CardView drive tabletop feedback",
+      "textPreview": "BoardManager, SlotInteract, and CardView drive tabletop feedback",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#F1F5F9",
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "BoardManager, SlotInteract, and CardView"
+          },
+          {
+            "index": 2,
+            "text": "drive tabletop feedback"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "BoardManager, SlotInteract, and CardView drive tabletop feedback",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#F1F5F9"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "BoardManager, SlotInteract, and CardView drive tabletop feedback",
+              "fontSize": 18,
+              "color": "#F1F5F9"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kf6dcbul",
+      "id": "14",
+      "bbox": [
+        1130,
+        646,
+        64,
+        28
+      ],
+      "geometry": "rect",
+      "text": "09",
+      "textPreview": "09",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "fontSize": 16,
+        "typeface": "+mn-lt",
+        "color": "#D4AF37",
+        "bold": true,
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "09"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "09",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "color": "#D4AF37",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "09",
+              "fontSize": 16,
+              "color": "#D4AF37",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

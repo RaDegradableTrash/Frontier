@@ -1,0 +1,621 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/vi84i1",
+    "id": "vi84i1",
+    "slide": 10,
+    "layoutId": "3dd38f44-9f32-4052-b2be-7948590b0dd3",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "b046473a-2f46-44cb-8743-25bf14c33007",
+    "masterLayoutName": "Master",
+    "backgroundColor": "#020713",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "+mn-lt"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "3dd38f44-9f32-4052-b2be-7948590b0dd3",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "b046473a-2f46-44cb-8743-25bf14c33007",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "b046473a-2f46-44cb-8743-25bf14c33007",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "image",
+      "scope": "slide",
+      "aid": "im/qd4vmtwr",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "alt": "Polish the Surface, Deepen the System slide artwork",
+      "contentType": "image/png",
+      "imageFit": "cover",
+      "asset": {
+        "assetId": "716d2151-9e1b-4e02-a1a3-93707d7dc6a2",
+        "contentType": "image/png",
+        "byteLength": 2298574
+      }
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/czed8v6p",
+      "id": "2",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5kb6xkf6",
+      "id": "3",
+      "bbox": [
+        56,
+        76,
+        528,
+        568
+      ],
+      "geometry": "roundRect",
+      "fillColor": "rgba(6, 16, 29, 0.76)",
+      "lineColor": "rgba(212, 175, 55, 0.32)",
+      "lineWidth": 1
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u54zidon",
+      "id": "4",
+      "bbox": [
+        56,
+        76,
+        6,
+        568
+      ],
+      "geometry": "rect",
+      "fillColor": "#D4AF37",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nqxs72x4",
+      "id": "5",
+      "bbox": [
+        100,
+        118,
+        440,
+        30
+      ],
+      "geometry": "rect",
+      "text": "NEXT TARGETS",
+      "textPreview": "NEXT TARGETS",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "fontSize": 15,
+        "typeface": "+mn-lt",
+        "color": "#D4AF37",
+        "bold": true,
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "NEXT TARGETS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "NEXT TARGETS",
+          "resolvedTextStyle": {
+            "fontSize": 15,
+            "color": "#D4AF37",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "NEXT TARGETS",
+              "fontSize": 15,
+              "color": "#D4AF37",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cbulwval",
+      "id": "6",
+      "bbox": [
+        100,
+        166,
+        430,
+        150
+      ],
+      "geometry": "rect",
+      "text": "Polish the Surface, Deepen the System",
+      "textPreview": "Polish the Surface, Deepen the System",
+      "resolvedFontSize": 42,
+      "resolvedTextStyle": {
+        "fontSize": 42,
+        "typeface": "+mn-lt",
+        "color": "#F8FAFC",
+        "bold": true,
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Polish the Surface,"
+          },
+          {
+            "index": 2,
+            "text": "Deepen the System"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Polish the Surface, Deepen the System",
+          "resolvedTextStyle": {
+            "fontSize": 42,
+            "color": "#F8FAFC",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Polish the Surface, Deepen the System",
+              "fontSize": 42,
+              "color": "#F8FAFC",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5sneloj2",
+      "id": "7",
+      "bbox": [
+        100,
+        306,
+        432,
+        96
+      ],
+      "geometry": "rect",
+      "text": "The roadmap moves from placeholder visuals and broad mechanics toward a richer card-game product loop.",
+      "textPreview": "The roadmap moves from placeholder visuals and broad mechanics toward a richer card-game product loop.",
+      "resolvedFontSize": 21,
+      "resolvedTextStyle": {
+        "fontSize": 21,
+        "typeface": "+mn-lt",
+        "color": "#DBE5F0",
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The roadmap moves from placeholder"
+          },
+          {
+            "index": 2,
+            "text": "visuals and broad mechanics toward a"
+          },
+          {
+            "index": 3,
+            "text": "richer card-game product loop."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The roadmap moves from placeholder visuals and broad mechanics toward a richer card-game product loop.",
+          "resolvedTextStyle": {
+            "fontSize": 21,
+            "color": "#DBE5F0"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "The roadmap moves from placeholder visuals and broad mechanics toward a richer card-game product loop.",
+              "fontSize": 21,
+              "color": "#DBE5F0"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/y90je9cv",
+      "id": "8",
+      "bbox": [
+        102,
+        447,
+        12,
+        12
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#52D1FF",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nuxc3ylc",
+      "id": "9",
+      "bbox": [
+        128,
+        438,
+        390,
+        44
+      ],
+      "geometry": "rect",
+      "text": "World-space card prefabs and animated drag previews",
+      "textPreview": "World-space card prefabs and animated drag previews",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#F1F5F9",
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "World-space card prefabs and animated drag"
+          },
+          {
+            "index": 2,
+            "text": "previews"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "World-space card prefabs and animated drag previews",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#F1F5F9"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "World-space card prefabs and animated drag previews",
+              "fontSize": 18,
+              "color": "#F1F5F9"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/36hcrmhk",
+      "id": "10",
+      "bbox": [
+        102,
+        505,
+        12,
+        12
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#D4AF37",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/eloj2t83",
+      "id": "11",
+      "bbox": [
+        128,
+        496,
+        390,
+        44
+      ],
+      "geometry": "rect",
+      "text": "Expanded timing windows, keywords, nations, and targeting",
+      "textPreview": "Expanded timing windows, keywords, nations, and targeting",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#F1F5F9",
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Expanded timing windows, keywords,"
+          },
+          {
+            "index": 2,
+            "text": "nations, and targeting"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Expanded timing windows, keywords, nations, and targeting",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#F1F5F9"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Expanded timing windows, keywords, nations, and targeting",
+              "fontSize": 18,
+              "color": "#F1F5F9"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lc7u54zi",
+      "id": "12",
+      "bbox": [
+        102,
+        563,
+        12,
+        12
+      ],
+      "geometry": "ellipse",
+      "fillColor": "#D4AF37",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wra5gbq1",
+      "id": "13",
+      "bbox": [
+        128,
+        554,
+        390,
+        44
+      ],
+      "geometry": "rect",
+      "text": "Deck builder, collection data, VFX, sound, and state panels",
+      "textPreview": "Deck builder, collection data, VFX, sound, and state panels",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "+mn-lt",
+        "color": "#F1F5F9",
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Deck builder, collection data, VFX, sound, and"
+          },
+          {
+            "index": 2,
+            "text": "state panels"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Deck builder, collection data, VFX, sound, and state panels",
+          "resolvedTextStyle": {
+            "fontSize": 18,
+            "color": "#F1F5F9"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Deck builder, collection data, VFX, sound, and state panels",
+              "fontSize": 18,
+              "color": "#F1F5F9"
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7u54zido",
+      "id": "14",
+      "bbox": [
+        1130,
+        646,
+        64,
+        28
+      ],
+      "geometry": "rect",
+      "text": "10",
+      "textPreview": "10",
+      "resolvedFontSize": 16,
+      "resolvedTextStyle": {
+        "fontSize": 16,
+        "typeface": "+mn-lt",
+        "color": "#D4AF37",
+        "bold": true,
+        "alignment": "left",
+        "insets": {
+          "top": 4.8,
+          "right": 9.6,
+          "bottom": 4.8,
+          "left": 9.6
+        }
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "10"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "10",
+          "resolvedTextStyle": {
+            "fontSize": 16,
+            "color": "#D4AF37",
+            "bold": true
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "10",
+              "fontSize": 16,
+              "color": "#D4AF37",
+              "bold": true
+            }
+          ],
+          "marginLeft": 0
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}
