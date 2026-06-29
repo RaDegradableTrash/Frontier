@@ -16,6 +16,7 @@ public class CardData : ScriptableObject
     public CardEffectType effectType = CardEffectType.None;
     public int effectAmount;
     public CardKeyword keywords = CardKeyword.None;
+    public string addedCardName;
     public Sprite artwork;
     public int attack = 1;
     public int defense = 1;
@@ -39,6 +40,7 @@ public class CardData : ScriptableObject
             Trigger = trigger,
             EffectType = effectType,
             EffectAmount = effectAmount,
+            AddedCardName = addedCardName,
             Keywords = keywords,
             Owner = owner,
             Zone = CardZone.Deck

@@ -62,10 +62,20 @@ public static class SlotHighlightLabelRules
                 return "REPAIR HQ";
             case CardEffectType.DrawCards:
                 return "DRAW CARDS";
+            case CardEffectType.DamageTargetUnitAndAdjacent:
+                return "DMG + AOE";
+            case CardEffectType.DrawForCardsPlayed:
+                return "DRAW CARDS";
             case CardEffectType.BuffFriendlyUnit:
                 return "BUFF ALLY";
             case CardEffectType.PinTargetUnit:
                 return "PIN UNIT";
+            case CardEffectType.IncreaseEnemyCosts:
+                return "ENEMY +1 COST";
+            case CardEffectType.DeployWithBlitz:
+                return "AIRBORNE";
+            case CardEffectType.FieldIntel:
+                return "FIELD INTEL";
             default:
                 return "PLAY ORDER";
         }

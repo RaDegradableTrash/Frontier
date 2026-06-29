@@ -1,3 +1,4 @@
+using UnityEngine;
 using System.Collections.Generic;
 
 public class PlayerState
@@ -10,16 +11,138 @@ public class PlayerState
     public readonly List<RuntimeCard> Hand = new List<RuntimeCard>();
     public readonly List<RuntimeCard> Discard = new List<RuntimeCard>();
     public readonly List<RuntimeCard> Countermeasures = new List<RuntimeCard>();
+    public int DeploymentCostModifier;
+    public int OperationCostModifier;
+    public int CardsPlayedThisTurn;
+    private int signalLostDeploymentPenalty;
+    private int signalLostOperationPenalty;
+    private int signalLostTurnsRemaining;
+    private int pendingFieldIntelCards;
+    private int gilbertaAuraSources;
 
     public PlayerState(PlayerSide side)
     {
         Side = side;
     }
 
+    public int EffectiveDeploymentCost(int baseCost)
+    {
+        return Mathf.Max(0, baseCost + DeploymentCostModifier);
+    }
+
+    public int EffectiveOperationCost(int baseCost)
+    {
+        return Mathf.Max(0, baseCost + OperationCostModifier - gilbertaAuraSources);
+    }
+
+    public int EffectiveDeploymentCost(RuntimeCard card)
+    {
+        return card == null ? int.MaxValue : EffectiveDeploymentCost(card.KreditCost);
+    }
+
+    public int EffectiveOperationCost(RuntimeCard card)
+    {
+        return card == null ? int.MaxValue : EffectiveOperationCost(card.OperationCost);
+    }
+
+    public bool CanSpendDeploymentCost(int cost)
+    {
+        return KreditRules.CanSpend(Kredits, cost);
+    }
+
+    public bool TrySpendDeploymentCost(int cost)
+    {
+        return TrySpendKredits(cost);
+    }
+
+    public bool CanSpendOperationCost(RuntimeCard unit)
+    {
+        return CanSpendOperationCost(EffectiveOperationCost(unit));
+    }
+
+    public bool CanSpendOperationCost(int cost)
+    {
+        return KreditRules.CanSpend(Kredits, cost);
+    }
+
+    public bool TrySpendOperationCost(int cost)
+    {
+        return TrySpendKredits(cost);
+    }
+
+    public void ApplySignalLostPenalty(int turns)
+    {
+        int penaltyTurns = Mathf.Max(1, turns);
+        DeploymentCostModifier += penaltyTurns;
+        OperationCostModifier += penaltyTurns;
+        signalLostDeploymentPenalty += penaltyTurns;
+        signalLostOperationPenalty += penaltyTurns;
+        signalLostTurnsRemaining += penaltyTurns;
+    }
+
+    public void RegisterCardPlayed()
+    {
+        CardsPlayedThisTurn++;
+    }
+
+    public void MarkFieldIntelPending(int amount = 1)
+    {
+        pendingFieldIntelCards += Mathf.Max(1, amount);
+    }
+
+    public bool ConsumeFieldIntelDraw()
+    {
+        if (pendingFieldIntelCards <= 0)
+        {
+            return false;
+        }
+
+        pendingFieldIntelCards--;
+        return true;
+    }
+
+    public int GilbertaAuraSources => gilbertaAuraSources;
+
+    public void RegisterGilbertaAura()
+    {
+        gilbertaAuraSources++;
+    }
+
+    public void RemoveGilbertaAura()
+    {
+        if (gilbertaAuraSources <= 0)
+        {
+            return;
+        }
+
+        gilbertaAuraSources--;
+    }
+
+    public int PendingFieldIntelCount => pendingFieldIntelCards;
+
+    private void ResolveSignalLostExpiration()
+    {
+        if (signalLostTurnsRemaining <= 0)
+        {
+            return;
+        }
+
+        signalLostTurnsRemaining--;
+        if (signalLostTurnsRemaining == 0)
+        {
+            DeploymentCostModifier -= signalLostDeploymentPenalty;
+            OperationCostModifier -= signalLostOperationPenalty;
+            signalLostDeploymentPenalty = 0;
+            signalLostOperationPenalty = 0;
+        }
+    }
+
     public void StartTurn()
     {
         MaxKredits = KreditRules.NextMaxKredits(MaxKredits);
         Kredits = KreditRules.RefilledKredits(MaxKredits);
+        ResolveSignalLostExpiration();
+        CardsPlayedThisTurn = 0;
     }
 
     public bool CanSpendKredits(int cost)

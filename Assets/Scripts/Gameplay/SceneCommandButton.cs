@@ -8,9 +8,9 @@ public class SceneCommandButton : MonoBehaviour
     [SerializeField] private SceneCommandType command = SceneCommandType.StartMatch;
     [SerializeField] private string label = "Command";
     [SerializeField] private Color normalColor = Color.white;
-    [SerializeField] private Color hoverColor = Color.yellow;
+    [SerializeField] private Color hoverColor = new Color(0.88f, 0.96f, 1f, 1f);
     [SerializeField] private Color plateColor = new Color(0.08f, 0.1f, 0.12f, 0.9f);
-    [SerializeField] private Color plateHoverColor = new Color(0.18f, 0.16f, 0.06f, 0.95f);
+    [SerializeField] private Color plateHoverColor = new Color(0.14f, 0.22f, 0.28f, 0.95f);
     [SerializeField] private Color disabledLabelColor = new Color(0.45f, 0.45f, 0.45f, 1f);
     [SerializeField] private Color disabledPlateColor = new Color(0.03f, 0.03f, 0.035f, 0.85f);
     [SerializeField] private Vector2 plateSize = PlayableSceneRules.CommandButtonPlateSize;
@@ -41,6 +41,11 @@ public class SceneCommandButton : MonoBehaviour
     }
 
     private void OnMouseDown()
+    {
+        SetHover(true);
+    }
+
+    private void OnMouseUpAsButton()
     {
         if (SceneCommandRules.ShouldForwardVisibleClick(isVisible) && controller != null)
         {

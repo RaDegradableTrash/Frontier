@@ -100,16 +100,24 @@ public static class CardTextRules
         switch (effectType)
         {
             case CardEffectType.DamageTargetUnit:
+            case CardEffectType.DamageTargetUnitAndAdjacent:
             case CardEffectType.DamageEnemyHeadquarters:
                 return "DMG";
             case CardEffectType.RepairHeadquarters:
                 return "HEAL";
+            case CardEffectType.DrawForCardsPlayed:
             case CardEffectType.DrawCards:
                 return "DRAW";
             case CardEffectType.BuffFriendlyUnit:
+            case CardEffectType.Trap:
                 return "BUFF";
             case CardEffectType.PinTargetUnit:
                 return "PIN";
+            case CardEffectType.IncreaseEnemyCosts:
+            case CardEffectType.DeployWithBlitz:
+            case CardEffectType.AddUnitToHand:
+            case CardEffectType.FieldIntel:
+                return "SPECIAL";
             case CardEffectType.CancelAttack:
                 return "STOP";
             default:

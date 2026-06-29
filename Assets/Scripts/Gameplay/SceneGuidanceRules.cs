@@ -53,8 +53,8 @@ public static class SceneGuidanceRules
     public static string OpeningHandPrompt(bool mulliganUsed)
     {
         return mulliganUsed
-            ? "OPENING HAND — INSPECT HAND, THEN KEEP HAND"
-            : "OPENING HAND — INSPECT HAND, KEEP OR MULLIGAN";
+            ? "MULLIGAN DONE"
+            : "MULLIGAN";
     }
 
     public static string TablePrompt(GamePhase phase, PlayerSide activeSide)

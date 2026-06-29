@@ -23,6 +23,9 @@ public static class SceneCommandRulesTests
             !SceneCommandRules.IsAvailable(SceneCommandType.StrikeBoard, GamePhase.DeckBuilder, PlayerSide.Player, false, true, true, false),
             "STRIKE should not be available before the match starts.");
         AssertTrue(
+            SceneCommandRules.IsAvailable(SceneCommandType.EndTurn, GamePhase.PlayerTurn, PlayerSide.Player, true, true, true, false),
+            "End Turn should stay available while floating combat text resolves.");
+        AssertTrue(
             SceneCommandRules.ShouldForwardVisibleClick(true),
             "Visible disabled command buttons should still forward clicks so the status panel can explain why they are unavailable.");
         AssertTrue(

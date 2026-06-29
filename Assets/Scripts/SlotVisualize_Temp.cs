@@ -30,15 +30,20 @@ public class SlotVisualize_Temp : MonoBehaviour
 
     public void SetHighlighted(bool highlighted, string label)
     {
-        UpdateColor(highlighted ? Color.yellow : baseColor);
+        UpdateColor(highlighted ? Color.white : baseColor, highlighted);
         SetHighlightLabelVisible(highlighted, label);
     }
 
     public void UpdateColor(Color color)
     {
+        UpdateColor(color, false);
+    }
+
+    private void UpdateColor(Color color, bool highlighted)
+    {
         if (fillMaterial != null)
         {
-            fillMaterial.color = FillColor(color);
+            fillMaterial.color = FillColor(color, highlighted);
         }
 
         if (lineRenderer == null)
@@ -65,7 +70,7 @@ public class SlotVisualize_Temp : MonoBehaviour
         DestroyGeneratedObject(fill.GetComponent<Collider>());
 
         fillRenderer = fill.GetComponent<MeshRenderer>();
-        fillMaterial = new Material(Shader.Find("Standard"));
+        fillMaterial = new Material(Shader.Find("Unlit/Color"));
         fillMaterial.color = FillColor(color);
         fillRenderer.material = fillMaterial;
     }
@@ -142,7 +147,7 @@ public class SlotVisualize_Temp : MonoBehaviour
         DestroyGeneratedObject(backing.GetComponent<Collider>());
 
         highlightLabelBackingRenderer = backing.GetComponent<MeshRenderer>();
-        Material backingMaterial = new Material(Shader.Find("Standard"));
+        Material backingMaterial = new Material(Shader.Find("Unlit/Color"));
         backingMaterial.color = PlayableSceneRules.HighlightedSlotLabelBackingColor;
         highlightLabelBackingRenderer.material = backingMaterial;
         highlightLabelBackingRenderer.enabled = false;
@@ -150,7 +155,17 @@ public class SlotVisualize_Temp : MonoBehaviour
 
     private Color FillColor(Color color)
     {
-        return Color.Lerp(PlayableSceneRules.TabletopColor, color, 0.18f);
+        return FillColor(color, false);
+    }
+
+    private Color FillColor(Color color, bool highlighted)
+    {
+        if (highlighted)
+        {
+            return Color.Lerp(PlayableSceneRules.TabletopColor * 0.72f, Color.white, 0.12f);
+        }
+
+        return Color.Lerp(PlayableSceneRules.TabletopColor * 0.72f, color, 0.26f);
     }
 
     private void DestroyGeneratedObject(Object generatedObject)

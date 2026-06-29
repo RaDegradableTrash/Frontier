@@ -18,6 +18,7 @@ public class RuntimeCard
     public CardTrigger Trigger;
     public CardEffectType EffectType;
     public int EffectAmount;
+    public string AddedCardName;
     public CardKeyword Keywords;
     public PlayerSide Owner;
     public CardZone Zone;
@@ -42,6 +43,7 @@ public class RuntimeCard
             Type = Type,
             KreditCost = KreditCost,
             OperationCost = OperationCost,
+            AddedCardName = AddedCardName,
             Attack = Attack,
             Defense = Defense,
             CurrentDefense = Defense,

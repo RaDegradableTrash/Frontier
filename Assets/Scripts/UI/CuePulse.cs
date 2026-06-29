@@ -29,7 +29,7 @@ public class CuePulse : MonoBehaviour
 
         if (elapsed >= lifetime)
         {
-            Destroy(gameObject);
+            RuntimeSafeDestroy.Destroy(gameObject);
         }
     }
 }

@@ -18,11 +18,11 @@ public static class MatchStartRulesTests
             "Enemy turns should not force the player hand to remain visible.");
         RuntimeCard openingHandCard = new RuntimeCard { Owner = PlayerSide.Player, Zone = CardZone.Hand };
         AssertTrue(
-            MatchStartRules.ShouldInspectOnlyDuringOpeningHand(GamePhase.Mulligan, PlayerSide.Player, openingHandCard),
-            "Opening-hand cards should be clickable for inspection before Keep or Mulligan.");
+            !MatchStartRules.ShouldInspectOnlyDuringOpeningHand(GamePhase.Mulligan, PlayerSide.Player, openingHandCard),
+            "Opening-hand cards should toggle mulligan marks instead of inspect-only clicks.");
         AssertTrue(
-            !MatchStartRules.ShouldInspectOnlyDuringOpeningHand(GamePhase.PlayerTurn, PlayerSide.Player, openingHandCard),
-            "Normal player turns should allow ordinary card selection instead of inspection-only clicks.");
+            MatchStartRules.ShouldUseMulliganPresentation(GamePhase.Mulligan, PlayerSide.Player),
+            "Mulligan phase should use centered hand presentation.");
         return 0;
     }
 

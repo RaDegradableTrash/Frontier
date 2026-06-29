@@ -60,7 +60,7 @@ public class SceneCardGallery : MonoBehaviour
             Transform child = transform.GetChild(i);
             if (child.name.StartsWith("Gallery_"))
             {
-                Destroy(child.gameObject);
+                RuntimeSafeDestroy.Destroy(child.gameObject);
             }
         }
     }

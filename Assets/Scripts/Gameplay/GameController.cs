@@ -4,6 +4,15 @@ using UnityEngine;
 public class GameController : MonoBehaviour
 {
     private const string DeckSavePrefix = "Frontier.CustomDeck.";
+    private const string AirborneOrderName = "空降 AIRBORNE";
+    private const string SignalLostOrderName = "连接丢失 SIGNAL LOST";
+    private const string TrapCountermeasureName = "诱饵 TRAP";
+    private const string FieldIntelCountermeasureName = "FIELD INTEL";
+    private const string DiJiangOrderName = "帝江号，清空区域";
+    private const string PerlicaUnitName = "佩丽卡 Perlica";
+    private const string M3UnitName = "M3 M3";
+    private const string ChenQianyuUnitName = "陈千语 ChenQianyu";
+    private const string GilbertaUnitName = "洁尔佩塔 Gilberta";
 
     [SerializeField] private BoardManager board;
     [SerializeField] private CameraInteraction cameraInteraction;
@@ -21,6 +30,7 @@ public class GameController : MonoBehaviour
     private readonly PlayerState player = new PlayerState(PlayerSide.Player);
     private readonly PlayerState enemy = new PlayerState(PlayerSide.Enemy);
     private readonly List<CardView> cardViews = new List<CardView>();
+    private readonly List<CardView> transientCardViews = new List<CardView>();
     private List<CardView> reusableCardViews;
     private readonly List<string> actionLog = new List<string>();
     private readonly Queue<ResolutionEvent> resolutionEvents = new Queue<ResolutionEvent>();
@@ -29,6 +39,7 @@ public class GameController : MonoBehaviour
     private readonly List<ScenePileDisplay> pileDisplays = new List<ScenePileDisplay>();
     private readonly List<SceneKreditDisplay> kreditDisplays = new List<SceneKreditDisplay>();
     private readonly List<SceneCommandButton> sceneCommandButtons = new List<SceneCommandButton>();
+    private readonly HashSet<string> mulliganMarkedIds = new HashSet<string>();
 
     private RuntimeCard selectedCard;
     private CardView selectedView;
@@ -52,17 +63,36 @@ public class GameController : MonoBehaviour
     private float playerHandRevealGraceUntil;
     private int selectedDeckSlot = 1;
     private RuntimeCard inspectedCard;
+    private RuntimeCard centerInspectCard;
+    private string pendingDeployDropCardId;
+    private readonly List<PendingDrawAnimation> pendingDrawAnimations = new List<PendingDrawAnimation>();
+    private RuntimeCard pendingAirborneUnit;
     private string collectionSearch = string.Empty;
     private FeedbackManager feedbackManager;
     private string status = "Choose a starter deck.";
     private DragTargetArrow dragTargetArrow;
+    private int autoDemoActionsRemaining;
+    private float nextAutoDemoActionTime;
+    private int lastSceneCommandPointerFrame = -1;
+    private CardView pointerFallbackCard;
+    private bool pointerFallbackActive;
+
+    private struct PendingDrawAnimation
+    {
+        public string CardId;
+        public PlayerSide Side;
+    }
 
     private void Awake()
     {
-        EnsurePlayablePresentation();
-        EnsureBoard();
-        EnsureFeedbackManager();
-        board.Initialize(this);
+        if (Application.isPlaying)
+        {
+            EnsurePlayablePresentation();
+            EnsureBoard();
+            EnsureFeedbackManager();
+            EnsureSceneIconRegistry();
+            board.Initialize(this);
+        }
     }
 
     private void Start()
@@ -76,6 +106,7 @@ public class GameController : MonoBehaviour
             {
                 KeepOpeningHand();
             }
+            StartAutoDemoIfConfigured();
             return;
         }
 
@@ -86,6 +117,8 @@ public class GameController : MonoBehaviour
     private void Update()
     {
         UpdateHandReveal();
+        HandleCardPointerFallbackInput();
+        HandleSceneCommandPointerInput();
 
         if (Input.GetKeyDown(KeyCode.F1))
         {
@@ -141,6 +174,46 @@ public class GameController : MonoBehaviour
         {
             ExecuteRecommendedAction();
         }
+
+        UpdateAutoDemo();
+    }
+
+    private void StartAutoDemoIfConfigured()
+    {
+        if (!PlayableSceneRules.AutoDemoActionsEnabled)
+        {
+            return;
+        }
+
+        autoDemoActionsRemaining = PlayableSceneRules.AutoDemoActionCount;
+        nextAutoDemoActionTime = Time.time + PlayableSceneRules.AutoDemoActionIntervalSeconds;
+        SetStatus("AUTO DEMO — WATCHING BASIC PLAY/ACTION FLOW. PRESS R TO RESTART.");
+    }
+
+    private void UpdateAutoDemo()
+    {
+        if (autoDemoActionsRemaining <= 0 || Time.time < nextAutoDemoActionTime || isResolvingEvents || phase == GamePhase.GameOver)
+        {
+            return;
+        }
+
+        if (phase == GamePhase.EnemyTurn || activeSide != PlayerSide.Player)
+        {
+            nextAutoDemoActionTime = Time.time + PlayableSceneRules.AutoDemoActionIntervalSeconds;
+            return;
+        }
+
+        if (phase == GamePhase.Mulligan)
+        {
+            ExecuteSceneCommand(SceneCommandType.KeepHand);
+            autoDemoActionsRemaining--;
+            nextAutoDemoActionTime = Time.time + PlayableSceneRules.AutoDemoActionIntervalSeconds;
+            return;
+        }
+
+        ExecuteRecommendedAction();
+        autoDemoActionsRemaining--;
+        nextAutoDemoActionTime = Time.time + PlayableSceneRules.AutoDemoActionIntervalSeconds;
     }
 
     private void UpdateHandReveal()
@@ -168,8 +241,7 @@ public class GameController : MonoBehaviour
         }
 
         bool shouldReveal = Time.time < playerHandRevealGraceUntil
-            || playerHandRevealRequested
-            || Input.mousePosition.y <= PlayableSceneRules.HandHoverRevealPixelHeight;
+            || IsPointerRaycastOverPlayerHand();
         if (shouldReveal == playerHandRevealed)
         {
             return;
@@ -190,6 +262,48 @@ public class GameController : MonoBehaviour
         UpdateHandReveal();
     }
 
+    private bool IsPointerRaycastOverPlayerHand()
+    {
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null)
+        {
+            return false;
+        }
+
+        Vector3 pointer = Input.mousePosition;
+        if (pointer.x < 0f || pointer.y < 0f || pointer.x > Screen.width || pointer.y > Screen.height)
+        {
+            return false;
+        }
+
+        Ray ray = mainCamera.ScreenPointToRay(pointer);
+        RaycastHit[] hits = Physics.RaycastAll(ray, 50f);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider hitCollider = hits[i].collider;
+            if (hitCollider == null)
+            {
+                continue;
+            }
+
+            if (hitCollider.GetComponent<HandRevealZone>() != null)
+            {
+                return true;
+            }
+
+            CardView cardView = hitCollider.GetComponent<CardView>();
+            if (cardView != null
+                && cardView.Card != null
+                && cardView.Card.Owner == PlayerSide.Player
+                && cardView.Card.Zone == CardZone.Hand)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private void RevealPlayerHandBriefly(float seconds = 4f)
     {
         playerHandRevealGraceUntil = Time.time + seconds;
@@ -204,6 +318,35 @@ public class GameController : MonoBehaviour
         }
 
         RuntimeCard clicked = view.Card;
+        if (MulliganRules.CanMarkForDiscard(phase, activeSide, clicked))
+        {
+            bool marked = MulliganRules.ToggleMarked(mulliganMarkedIds, clicked);
+            view.SetMulliganMarked(marked);
+            SetStatus(marked
+                ? $"Marked {clicked.CardName} for mulligan. Click Mulligan to replace marked cards."
+                : $"Unmarked {clicked.CardName}.");
+            return;
+        }
+
+        if (CardInspectModeRules.ShouldExitInspectMode(clicked, centerInspectCard))
+        {
+            centerInspectCard = null;
+            SetStatus("Closed card detail view.");
+            RefreshAllViews();
+            return;
+        }
+
+        if (CardInspectModeRules.ShouldEnterInspectMode(phase, activeSide, clicked, centerInspectCard))
+        {
+            ClearSelection();
+            centerInspectCard = clicked;
+            inspectedCard = clicked;
+            SetStatus($"Viewing {clicked.CardName}. Click again to close.");
+            RefreshSceneInspector();
+            RefreshAllViews();
+            return;
+        }
+
         if (MatchStartRules.ShouldInspectOnlyDuringOpeningHand(phase, activeSide, clicked))
         {
             inspectedCard = clicked;
@@ -253,6 +396,17 @@ public class GameController : MonoBehaviour
             return;
         }
 
+        if (selectedCard != null && selectedCard.EffectType == CardEffectType.DeployWithBlitz
+            && selectedCard.Zone == CardZone.Hand && selectedCard.Type == CardType.Order
+            && clicked.Type == CardType.Unit && clicked.Zone == CardZone.Hand)
+        {
+            pendingAirborneUnit = clicked;
+            SelectCard(selectedCard, selectedView);
+            SetStatus($"AIRBORNE: CLICK ANY EMPTY SLOT TO DEPLOY {clicked.CardName}." );
+            HighlightAirborneDeploymentTargets(clicked, true);
+            return;
+        }
+
         if (selectedCard != null && selectedCard.Zone == CardZone.Hand && selectedCard.Type == CardType.Unit && cardSlots.ContainsKey(clicked))
         {
             SetStatus(SceneGuidanceRules.OwnCardClickedWhileHandUnitSelectedPrompt(selectedCard, clicked));
@@ -274,6 +428,11 @@ public class GameController : MonoBehaviour
         SelectCard(clicked, view);
     }
 
+    public int AvailableKreditsFor(PlayerSide side)
+    {
+        return GetState(side).Kredits;
+    }
+
     public void HandleCardHovered(CardView view)
     {
         if (isResolvingEvents || view == null || view.Card == null || !CardTextRules.CanHoverInspect(view.Card, view.IsHidden))
@@ -292,18 +451,24 @@ public class GameController : MonoBehaviour
             return;
         }
 
+        if (view.Card.Zone == CardZone.Hand)
+        {
+            centerInspectCard = null;
+        }
+
         if (phase != GamePhase.PlayerTurn || activeSide != PlayerSide.Player)
         {
             SetStatus(SceneGuidanceRules.BlockedInteractionPrompt(phase, activeSide));
+            centerInspectCard = null;
+            ClearSelection();
             RefreshAllViews();
             return;
         }
 
-        SlotInteract slot = board.GetSlot(releasePosition);
+        SlotInteract slot = ResolvePointerSlot(releasePosition, view.Card);
         if (slot == null)
         {
-            SetStatus(SceneGuidanceRules.MissedDragTargetPrompt(view.Card));
-            RefreshAllViews();
+            RejectSelectedHandCard(SceneGuidanceRules.MissedDragTargetPrompt(view.Card));
             return;
         }
 
@@ -322,9 +487,14 @@ public class GameController : MonoBehaviour
             return;
         }
 
-        SlotInteract targetSlot = board.GetSlot(pointerPosition);
-        bool legalAttack = view.Card.Zone == CardZone.Frontline && IsLegalAttackTarget(view.Card, targetSlot);
+        ClearCardDamagePreviews();
+        SlotInteract targetSlot = ResolvePointerSlot(pointerPosition, view.Card);
+        bool canAttack = CanAttack(view.Card, player.Kredits);
+        bool legalAttack = canAttack && view.Card.Zone == CardZone.Frontline && IsLegalAttackTarget(view.Card, targetSlot);
         string label = DragTargetLabelRules.LabelFor(view.Card, targetSlot, legalAttack);
+        DamagePreview preview = canAttack ? BuildAttackDamagePreview(view.Card, targetSlot) : default;
+        ApplyDamagePreviewToSlot(targetSlot, preview);
+        ApplyDamagePreviewToView(view, preview.CounterDamage, preview.AttackerLethal);
         if (dragTargetArrow == null)
         {
             GameObject arrowObject = new GameObject("Drag Target Arrow");
@@ -332,15 +502,164 @@ public class GameController : MonoBehaviour
             dragTargetArrow.Initialize();
         }
 
-        dragTargetArrow.UpdateArrow(view.transform.position, pointerPosition, label);
+        dragTargetArrow.UpdateArrow(view.transform.position, pointerPosition, label, preview, view.transform.position);
+    }
+
+    public void HandleHandOrderDragPreview(CardView view, Vector3 pointerPosition)
+    {
+        if (view == null || view.Card == null || view.Card.Type != CardType.Order)
+        {
+            return;
+        }
+
+        if (OrderDragRules.ShouldFollowPointer(view.Card))
+        {
+            ClearDragPreview();
+            return;
+        }
+
+        SlotInteract targetSlot = board.GetSlot(pointerPosition);
+        bool legalTarget = IsLegalOrderTarget(view.Card, targetSlot, PlayerSide.Player);
+        string label = legalTarget ? "PLAY ORDER" : "TARGET";
+        DamagePreview preview = BuildOrderDamagePreview(view.Card, targetSlot);
+        ClearCardDamagePreviews();
+        ApplyDamagePreviewToSlot(targetSlot, preview);
+        ApplyOrderAdjacentDamagePreviews(view.Card, targetSlot);
+        if (dragTargetArrow == null)
+        {
+            GameObject arrowObject = new GameObject("Drag Target Arrow");
+            dragTargetArrow = arrowObject.AddComponent<DragTargetArrow>();
+            dragTargetArrow.Initialize();
+        }
+
+        dragTargetArrow.UpdateArrow(view.transform.position + Vector3.up * 0.2f, pointerPosition, label, preview, view.transform.position);
+    }
+
+    public void HandleHandOrderReleased(CardView view, Vector3 releasePosition)
+    {
+        if (view == null || view.Card == null || view.Card.Type != CardType.Order)
+        {
+            return;
+        }
+
+        centerInspectCard = null;
+        if (phase != GamePhase.PlayerTurn || activeSide != PlayerSide.Player)
+        {
+            SetStatus(SceneGuidanceRules.BlockedInteractionPrompt(phase, activeSide));
+            RefreshAllViews();
+            return;
+        }
+
+        SelectCard(view.Card, view);
+        if (OrderDragRules.ShouldFollowPointer(view.Card))
+        {
+            if (player.CanSpendKredits(view.Card.KreditCost) && IsLegalOrderTarget(view.Card, null, PlayerSide.Player))
+            {
+                TryPlayOrderOnSlot(null);
+            }
+            else
+            {
+                RejectSelectedHandCard(SceneGuidanceRules.CannotAffordCardPrompt(view.Card, "play order", player.Kredits));
+            }
+
+            return;
+        }
+
+        SlotInteract slot = board.GetSlot(releasePosition);
+        if (slot == null || !IsLegalOrderTarget(view.Card, slot, PlayerSide.Player))
+        {
+            RejectSelectedHandCard(SceneGuidanceRules.IllegalOrderTargetPrompt(view.Card, slot != null ? slot.Occupant : null, PlayerSide.Player));
+            return;
+        }
+
+        TryPlayOrderOnSlot(slot);
     }
 
     public void ClearDragPreview()
     {
         if (dragTargetArrow != null)
         {
-            Destroy(dragTargetArrow.gameObject);
+            RuntimeSafeDestroy.Destroy(dragTargetArrow.gameObject);
             dragTargetArrow = null;
+        }
+
+        ClearCardDamagePreviews();
+    }
+
+    private void ClearCardDamagePreviews()
+    {
+        foreach (CardView view in cardViews)
+        {
+            if (view != null)
+            {
+                view.HideDamagePreview();
+            }
+        }
+
+        board?.HideHeadquartersDamagePreviews();
+    }
+
+    private void ApplyDamagePreviewToSlot(SlotInteract slot, DamagePreview preview)
+    {
+        if (slot == null)
+        {
+            return;
+        }
+
+        if (BoardTargetRules.IsHeadquartersSlot(slot))
+        {
+            PlayerSide headquartersSide = slot.Zone == SlotZone.EnemySupport ? PlayerSide.Enemy : PlayerSide.Player;
+            board?.ShowHeadquartersDamagePreview(headquartersSide, preview.DamageToTarget, preview.TargetLethal);
+            return;
+        }
+
+        if (!slot.IsOccupied || slot.Occupant == null)
+        {
+            return;
+        }
+
+        CardView targetView = FindView(slot.Occupant);
+        if (targetView == null)
+        {
+            return;
+        }
+
+        targetView.ShowDamagePreview(preview.DamageToTarget, preview.TargetLethal);
+    }
+
+    private void ApplyDamagePreviewToView(CardView view, int damage, bool lethal)
+    {
+        if (view == null)
+        {
+            return;
+        }
+
+        view.ShowDamagePreview(damage, lethal);
+    }
+
+    private void ApplyOrderAdjacentDamagePreviews(RuntimeCard order, SlotInteract targetSlot)
+    {
+        if (order == null || targetSlot == null || board == null || order.EffectType != CardEffectType.DamageTargetUnitAndAdjacent)
+        {
+            return;
+        }
+
+        ApplyAdjacentOrderDamagePreview(order, board.GetSlot(targetSlot.X - 1, targetSlot.Zone));
+        ApplyAdjacentOrderDamagePreview(order, board.GetSlot(targetSlot.X + 1, targetSlot.Zone));
+    }
+
+    private void ApplyAdjacentOrderDamagePreview(RuntimeCard order, SlotInteract slot)
+    {
+        if (order == null || slot == null || !slot.IsOccupied || slot.Occupant == null)
+        {
+            return;
+        }
+
+        int damage = ModifiedDamage(order.EffectAmount, slot.Occupant);
+        CardView adjacentView = FindView(slot.Occupant);
+        if (adjacentView != null)
+        {
+            adjacentView.ShowDamagePreview(damage, damage >= slot.Occupant.CurrentDefense);
         }
     }
 
@@ -390,7 +709,7 @@ public class GameController : MonoBehaviour
 
         if (selectedCard == null)
         {
-            if (slot.X == BoardTargetRules.HeadquartersSlotIndex)
+            if (BoardTargetRules.IsHeadquartersSlot(slot))
             {
                 PlayerSide headquartersSide = slot.Zone == SlotZone.EnemySupport ? PlayerSide.Enemy : PlayerSide.Player;
                 SetStatus(SceneGuidanceRules.HeadquartersClickedPrompt(headquartersSide));
@@ -407,7 +726,7 @@ public class GameController : MonoBehaviour
             return;
         }
 
-        if (slot.X == BoardTargetRules.HeadquartersSlotIndex)
+        if (BoardTargetRules.IsHeadquartersSlot(slot))
         {
             PlayerSide headquartersSide = slot.Zone == SlotZone.EnemySupport ? PlayerSide.Enemy : PlayerSide.Player;
             bool handUnitCannotDeployToHeadquarters = selectedCard.Zone == CardZone.Hand && selectedCard.Type == CardType.Unit;
@@ -428,7 +747,14 @@ public class GameController : MonoBehaviour
             }
             else if (selectedCard.Type == CardType.Order)
             {
+                if (selectedCard.EffectType == CardEffectType.DeployWithBlitz)
+                {
+                    TryPlayAirborneDeployment(slot);
+                }
+                else
+                {
                 TryPlayOrderOnSlot(slot);
+                }
             }
             else if (selectedCard.Type == CardType.Countermeasure)
             {
@@ -452,7 +778,7 @@ public class GameController : MonoBehaviour
 
     public void ExecuteSceneCommand(SceneCommandType command)
     {
-        if (isResolvingEvents && command != SceneCommandType.Restart)
+        if (isResolvingEvents && command != SceneCommandType.Restart && command != SceneCommandType.EndTurn)
         {
             SetStatus("Wait for the current action to finish.");
             return;
@@ -536,7 +862,9 @@ public class GameController : MonoBehaviour
 
     private void OnGUI()
     {
+        HandleCardPointerGuiFallback();
         DrawActionPromptHud();
+        DrawSceneCommandHitAreas();
 
         if (!showLegacyOverlay)
         {
@@ -601,6 +929,71 @@ public class GameController : MonoBehaviour
         }
     }
 
+    private void HandleCardPointerGuiFallback()
+    {
+        Event current = Event.current;
+        if (current == null || current.button != 0)
+        {
+            return;
+        }
+
+        if (current.type == EventType.MouseDown)
+        {
+            CardView view = FindGuiPointerCard(current.mousePosition);
+            if (view != null && view.BeginPointerInteraction())
+            {
+                pointerFallbackCard = view;
+                pointerFallbackActive = true;
+                lastSceneCommandPointerFrame = Time.frameCount;
+                current.Use();
+            }
+        }
+        else if (current.type == EventType.MouseDrag && pointerFallbackActive && pointerFallbackCard != null)
+        {
+            if (pointerFallbackCard.DragPointerInteraction())
+            {
+                lastSceneCommandPointerFrame = Time.frameCount;
+                current.Use();
+            }
+        }
+        else if (current.type == EventType.MouseUp && pointerFallbackActive && pointerFallbackCard != null)
+        {
+            pointerFallbackCard.EndPointerInteraction();
+            pointerFallbackActive = false;
+            pointerFallbackCard = null;
+            lastSceneCommandPointerFrame = Time.frameCount;
+            current.Use();
+        }
+    }
+
+    private CardView FindGuiPointerCard(Vector2 guiPosition)
+    {
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null)
+        {
+            return null;
+        }
+
+        Vector3 screenPointer = new Vector3(guiPosition.x, Screen.height - guiPosition.y, 0f);
+        CardView bestView = null;
+        float bestDistance = float.MaxValue;
+        foreach (CardView view in cardViews)
+        {
+            if (view == null || !view.TryPointerRaycastDistance(mainCamera, screenPointer, out float distance))
+            {
+                continue;
+            }
+
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestView = view;
+            }
+        }
+
+        return bestView;
+    }
+
     private void ExecuteDefaultSceneCommand()
     {
         if (phase == GamePhase.DeckBuilder)
@@ -646,6 +1039,54 @@ public class GameController : MonoBehaviour
         }
     }
 
+    private void DrawSceneCommandHitAreas()
+    {
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null)
+        {
+            return;
+        }
+
+        if (sceneCommandButtons.Count == 0)
+        {
+            sceneCommandButtons.AddRange(FindObjectsOfType<SceneCommandButton>());
+        }
+
+        foreach (SceneCommandButton button in sceneCommandButtons)
+        {
+            if (button == null)
+            {
+                continue;
+            }
+
+            bool available = IsSceneCommandAvailable(button.Command);
+            if (!IsSceneCommandVisible(button.Command, available))
+            {
+                continue;
+            }
+
+            Rect hitArea = SceneCommandGuiRect(button, mainCamera);
+            if (GUI.Button(hitArea, GUIContent.none, GUIStyle.none))
+            {
+                ExecuteSceneCommand(button.Command);
+                return;
+            }
+        }
+    }
+
+    private Rect SceneCommandGuiRect(SceneCommandButton button, Camera mainCamera)
+    {
+        Vector3 screenPosition = mainCamera.WorldToScreenPoint(button.transform.position);
+        float pixelsPerWorldUnit = Screen.height / (mainCamera.orthographicSize * 2f);
+        float width = PlayableSceneRules.CommandButtonPlateSize.x * pixelsPerWorldUnit * 1.05f;
+        float height = PlayableSceneRules.CommandButtonPlateSize.y * pixelsPerWorldUnit * 0.9f;
+        return new Rect(
+            screenPosition.x - width * 0.5f,
+            Screen.height - screenPosition.y - height * 0.5f,
+            width,
+            height);
+    }
+
     private void DrawInspectionPanel()
     {
         GUI.Box(new Rect(10, Screen.height - 164, 430, 154), "Card Detail");
@@ -678,6 +1119,7 @@ public class GameController : MonoBehaviour
     private System.Collections.IEnumerator ProcessResolutionEvents()
     {
         isResolvingEvents = true;
+        RefreshSceneCommandButtons();
         while (resolutionEvents.Count > 0)
         {
             ResolutionEvent resolutionEvent = resolutionEvents.Dequeue();
@@ -687,6 +1129,7 @@ public class GameController : MonoBehaviour
         }
 
         isResolvingEvents = false;
+        RefreshSceneCommandButtons();
     }
 
     private void CreateFloatingTextNow(string text, Vector3 position, Color color)
@@ -972,12 +1415,16 @@ public class GameController : MonoBehaviour
             presenter = gameObject.AddComponent<PlayableScenePresenter>();
         }
 
-        presenter.Apply();
+        if (ShouldMutateRuntime())
+        {
+            presenter.EnableRuntimePresentation();
+        }
     }
 
     private void StartNewMatch()
     {
         StopAllCoroutines();
+        ClearAllCardViews();
         ClearSelection();
         ClearRuntimeCards();
         player.HeadquartersHealth = 20;
@@ -987,12 +1434,14 @@ public class GameController : MonoBehaviour
         enemy.MaxKredits = 0;
         enemy.Kredits = 0;
         mulliganUsed = false;
+        mulliganMarkedIds.Clear();
+        centerInspectCard = null;
         hasFrontlineController = false;
         selectedEnemyDeck = EnemyDeckFor(selectedPlayerDeck);
         BuildDecks();
         DrawOpeningHands();
         phase = MatchStartRules.PhaseAfterAutoStart();
-        SetStatus("Opening hand: keep it or take one mulligan.");
+        SetStatus("Opening hand: click cards to mark for mulligan, then Mulligan or Keep Hand.");
         RefreshAllViews();
     }
 
@@ -1225,6 +1674,8 @@ public class GameController : MonoBehaviour
 
     private void KeepOpeningHand()
     {
+        mulliganMarkedIds.Clear();
+        centerInspectCard = null;
         StartTurn(PlayerSide.Player);
     }
 
@@ -1236,15 +1687,111 @@ public class GameController : MonoBehaviour
         }
 
         mulliganUsed = true;
-        ReturnHandToDeck(player);
-        Shuffle(player.Deck);
-        for (int i = 0; i < openingHandSize; i++)
+        List<RuntimeCard> markedCards = new List<RuntimeCard>();
+        Dictionary<string, Vector3> discardFlightStarts = new Dictionary<string, Vector3>();
+        foreach (RuntimeCard card in player.Hand)
+        {
+            if (MulliganRules.IsMarked(mulliganMarkedIds, card))
+            {
+                markedCards.Add(card);
+                CardView view = FindView(card);
+                discardFlightStarts[card.Id] = view != null
+                    ? view.transform.position
+                    : MulliganHandPosition(player.Hand.IndexOf(card), player.Hand.Count);
+            }
+        }
+
+        if (!MulliganRules.ShouldRedrawMarkedCards(mulliganMarkedIds))
+        {
+            SetStatus("Select cards to replace, then click Mulligan.");
+            mulliganUsed = false;
+            return;
+        }
+
+        foreach (RuntimeCard card in markedCards)
+        {
+            player.Hand.Remove(card);
+            card.Zone = CardZone.Discard;
+            player.Discard.Add(card);
+        }
+
+        PlayMulliganDiscardFlights(markedCards, discardFlightStarts);
+        for (int i = 0; i < markedCards.Count; i++)
         {
             DrawCard(player);
         }
 
-        SetStatus("Mulligan used. Keep this hand to start.");
-        RefreshAllViews();
+        mulliganMarkedIds.Clear();
+        centerInspectCard = null;
+        CancelAllCardPointerInteractions();
+        StartTurn(PlayerSide.Player);
+        SetStatus($"Mulligan replaced {markedCards.Count} card(s). Your turn.");
+        RefreshSceneStatus();
+    }
+
+    private void PlayMulliganDiscardFlights(List<RuntimeCard> discardedCards, Dictionary<string, Vector3> startPositions)
+    {
+        foreach (RuntimeCard card in discardedCards)
+        {
+            if (card == null)
+            {
+                continue;
+            }
+
+            Vector3 start = startPositions != null && startPositions.TryGetValue(card.Id, out Vector3 storedStart)
+                ? storedStart
+                : PlayableSceneRules.MulliganHandAnchor;
+            CardView flightView = CreateTransientCardView(card);
+            flightView.SetInteractionEnabled(false);
+            flightView.SetDragEnabled(false);
+            flightView.SetLayout(
+                start,
+                new Vector3(PlayableSceneRules.MulliganHandScale, 1f, PlayableSceneRules.MulliganHandScale),
+                Quaternion.identity,
+                false);
+            flightView.PlayMulliganDiscardFlight(start, DiscardWorldPosition(PlayerSide.Player));
+            StartCoroutine(DestroyTransientViewAfterDelay(flightView, CardMotionRules.MulliganDiscardFlightSeconds + 0.08f));
+        }
+    }
+
+    private System.Collections.IEnumerator DestroyTransientViewAfterDelay(CardView view, float seconds)
+    {
+        yield return new WaitForSeconds(seconds);
+        if (view != null)
+        {
+            transientCardViews.Remove(view);
+            RuntimeSafeDestroy.Destroy(view.gameObject);
+        }
+    }
+
+    private void ClearTransientCardViews()
+    {
+        for (int i = transientCardViews.Count - 1; i >= 0; i--)
+        {
+            CardView view = transientCardViews[i];
+            if (view != null)
+            {
+                RuntimeSafeDestroy.Destroy(view.gameObject);
+            }
+        }
+
+        transientCardViews.Clear();
+    }
+
+    private void ClearAllCardViews()
+    {
+        CardView[] views = FindObjectsOfType<CardView>();
+        foreach (CardView view in views)
+        {
+            if (view != null)
+            {
+                RuntimeSafeDestroy.Destroy(view.gameObject);
+            }
+        }
+
+        cardViews.Clear();
+        transientCardViews.Clear();
+        reusableCardViews = null;
     }
 
     private void ReturnHandToDeck(PlayerState state)
@@ -1260,6 +1807,7 @@ public class GameController : MonoBehaviour
     private void RestartGame()
     {
         StopAllCoroutines();
+        ClearAllCardViews();
         ClearSelection();
         ClearRuntimeCards();
         player.HeadquartersHealth = 20;
@@ -1269,6 +1817,8 @@ public class GameController : MonoBehaviour
         enemy.MaxKredits = 0;
         enemy.Kredits = 0;
         mulliganUsed = false;
+        mulliganMarkedIds.Clear();
+        centerInspectCard = null;
         hasFrontlineController = false;
         phase = GamePhase.DeckBuilder;
         SetStatus("Choose a starter deck, then start the match.");
@@ -1278,6 +1828,7 @@ public class GameController : MonoBehaviour
     private void ClearRuntimeCards()
     {
         inspectedCard = null;
+        pendingDrawAnimations.Clear();
         resolutionEvents.Clear();
         isResolvingEvents = false;
         actionLog.Clear();
@@ -1309,30 +1860,16 @@ public class GameController : MonoBehaviour
         player.Deck.Clear();
         enemy.Deck.Clear();
 
-        if (playerDeckAssets.Count > 0)
+        if (useCustomDeck && DeckRules.IsValidDeckSize(CurrentCustomDeckSize()))
         {
-            AddAssetDeck(player.Deck, PlayerSide.Player, playerDeckAssets);
+            AddCustomDeck(player.Deck, PlayerSide.Player, selectedPlayerDeck);
         }
         else
         {
-            if (useCustomDeck && DeckRules.IsValidDeckSize(CurrentCustomDeckSize()))
-            {
-                AddCustomDeck(player.Deck, PlayerSide.Player, selectedPlayerDeck);
-            }
-            else
-            {
-                AddStarterDeck(player.Deck, PlayerSide.Player, selectedPlayerDeck);
-            }
+            AddStarterDeck(player.Deck, PlayerSide.Player, selectedPlayerDeck);
         }
 
-        if (enemyDeckAssets.Count > 0)
-        {
-            AddAssetDeck(enemy.Deck, PlayerSide.Enemy, enemyDeckAssets);
-        }
-        else
-        {
-            AddStarterDeck(enemy.Deck, PlayerSide.Enemy, selectedEnemyDeck);
-        }
+        AddStarterDeck(enemy.Deck, PlayerSide.Enemy, selectedEnemyDeck);
 
         Shuffle(player.Deck);
         Shuffle(enemy.Deck);
@@ -1375,49 +1912,84 @@ public class GameController : MonoBehaviour
 
     private RuntimeCard[] StarterTemplates(DeckArchetype archetype)
     {
-        switch (archetype)
+        return new[]
         {
-            case DeckArchetype.AxisArmor:
-                return new[]
-                {
-                    Unit("Panzer Grenadiers", "Germany", 2, 2, 3, 1, CardKeyword.Guard | CardKeyword.HeavyArmor, "Guard, Heavy Armor. Efficient line holder."),
-                    Unit("Medium Armor", "Germany", 3, 3, 4, 2, CardKeyword.HeavyArmor, "Heavy Armor. Reduces incoming damage by 1."),
-                    Unit("Breakthrough Tank", "Germany", 5, 5, 5, 3, CardKeyword.Fury, "Fury. Heavy finisher."),
-                    Order("Field Repairs", "Germany", 2, CardEffectType.RepairHeadquarters, 3, "Repair your HQ for 3."),
-                    Order("Tactical Strike", "Germany", 3, CardEffectType.DamageTargetUnit, 3, "Deal 3 damage to a unit."),
-                    Countermeasure("Hidden Flak", "Germany", 2, 2, "Countermeasure. Punishes attackers.")
-                };
-            case DeckArchetype.SovietControl:
-                return new[]
-                {
-                    Unit("Rifle Regiment", "Soviet", 1, 1, 3, 1, CardKeyword.Guard, "Guard. Buys time."),
-                    Unit("Field Artillery", "Soviet", 4, 4, 3, 2, CardKeyword.Fury, "Fury. Can attack twice each turn."),
-                    Unit("Shock Troops", "Soviet", 3, 3, 3, 1, CardKeyword.Blitz | CardKeyword.Mobilize, "Blitz, Mobilize. Can deploy directly to a controlled frontline."),
-                    Order("Suppressing Fire", "Soviet", 2, CardEffectType.PinTargetUnit, 0, "Pin an enemy unit until its next turn."),
-                    Order("War Production", "Soviet", 2, CardEffectType.DrawCards, 2, "Draw 2 cards."),
-                    Countermeasure("Partisan Trap", "Soviet", 2, 2, "Countermeasure. Damages an attacker before combat.")
-                };
-            case DeckArchetype.JapaneseAmbush:
-                return new[]
-                {
-                    Unit("Supply Convoy", "Japan", 2, 1, 3, 1, CardKeyword.Smokescreen, CardTrigger.Deployment, CardEffectType.DrawCards, 1, "Deployment: draw 1 card. Smokescreen. Cannot be targeted by orders."),
-                    Unit("Fast Recon", "Japan", 1, 1, 1, 0, CardKeyword.Blitz | CardKeyword.Mobilize, "Blitz, Mobilize. Free operation pressure."),
-                    Unit("Veteran Infantry", "Japan", 3, 3, 2, 1, CardKeyword.Fury | CardKeyword.Ambush, "Fury, Ambush. Strikes first when attacked."),
-                    Order("Ambush Orders", "Japan", 2, CardEffectType.BuffFriendlyUnit, 1, "Give a friendly unit +1/+1."),
-                    Order("Dive Bombing", "Japan", 3, CardEffectType.DamageEnemyHeadquarters, 3, "Deal 3 damage to enemy HQ."),
-                    Countermeasure("Ambush Patrol", "Japan", 2, 2, "Countermeasure. When attacked, deal 2 damage to the attacker first.")
-                };
-            default:
-                return new[]
-                {
-                    Unit("Infantry Section", "Britain", 1, 1, 2, 1, CardKeyword.Guard, "Guard. Protects HQ and other units."),
-                    Unit("Forward Scouts", "USA", 2, 2, 2, 1, CardKeyword.Blitz | CardKeyword.Mobilize, "Blitz, Mobilize. Can operate and deploy aggressively."),
-                    Unit("Sherman Column", "USA", 3, 3, 3, 2, CardKeyword.HeavyArmor, "Heavy Armor. Balanced frontline unit."),
-                    Order("Air Strike", "USA", 3, CardEffectType.DamageTargetUnit, 2, "Deal 2 damage to a target enemy unit."),
-                    Order("War Bonds", "Britain", 2, CardEffectType.DrawCards, 2, "Draw 2 cards."),
-                    Countermeasure("Prepared Defense", "Britain", 2, CardEffectType.CancelAttack, 0, "Countermeasure. Cancel the next enemy attack.")
-                };
-        }
+            Unit(
+                PerlicaUnitName,
+                "Britain",
+                5,
+                3,
+                4,
+                2,
+                CardKeyword.None,
+                CardTrigger.Deployment,
+                CardEffectType.AddUnitToHand,
+                1,
+                "部署: 将一张【帝江号，清空区域】加入手牌。",
+                DiJiangOrderName),
+            Unit(
+                ChenQianyuUnitName,
+                "Britain",
+                5,
+                4,
+                6,
+                1,
+                CardKeyword.Blitz,
+                "闪击。"),
+            Unit(
+                M3UnitName,
+                "Britain",
+                6,
+                6,
+                6,
+                2,
+                CardKeyword.Guard | CardKeyword.Smokescreen,
+                "守护。烟幕。攻击时使所有友方目标具有+1防御。"),
+            Unit(
+                GilbertaUnitName,
+                "Britain",
+                4,
+                3,
+                4,
+                2,
+                CardKeyword.Smokescreen,
+                "烟幕。攻击时对相邻敌方目标造成1点伤害。此单位在场时，场上其他友方单位具有-1行动费用。"),
+            Order(
+                AirborneOrderName,
+                "Britain",
+                5,
+                CardEffectType.DeployWithBlitz,
+                0,
+                "选择手牌中的一张单位牌，选择并将其部署于场上任意位置，使其具有闪击。"),
+            Order(
+                SignalLostOrderName,
+                "Britain",
+                2,
+                CardEffectType.IncreaseEnemyCosts,
+                1,
+                "使对方手牌中所有单位牌+1部署费用，对方场上所有单位牌+1行动费用。"),
+            Order(
+                DiJiangOrderName,
+                "Britain",
+                4,
+                CardEffectType.DamageTargetUnitAndAdjacent,
+                5,
+                "对一个敌方目标造成5点伤害，对周围目标造成3点伤害。"),
+            Countermeasure(
+                TrapCountermeasureName,
+                "Britain",
+                3,
+                CardEffectType.Trap,
+                2,
+                "友方单位即将受到攻击时，使其先获得+2+1与伏击。"),
+            Countermeasure(
+                FieldIntelCountermeasureName,
+                "Britain",
+                3,
+                CardEffectType.FieldIntel,
+                0,
+                "敌方回合结束时，抽若干张牌，其数量与本回合内对方打出的手牌数等同。")
+        };
     }
 
 
@@ -1519,6 +2091,25 @@ public class GameController : MonoBehaviour
             return;
         }
 
+        if (card != null && card.CardName == GilbertaUnitName)
+        {
+            owner.RegisterGilbertaAura();
+        }
+
+        if (result.GiveCardToHand)
+        {
+            RuntimeCard template = FindCardTemplateByName(result.CardNameToHand);
+            if (template != null)
+            {
+                RuntimeCard reward = template.CloneFor(owner.Side);
+                reward.Zone = CardZone.Hand;
+                owner.Hand.Add(reward);
+            }
+
+            SpawnFloatingText($"+{card.CardName} reward", slot.transform.position, Color.yellow, FeedbackCueType.Draw);
+            SetStatus($"{card.CardName} added {result.CardNameToHand} to hand.");
+        }
+
         if (result.CardsToDraw > 0)
         {
             for (int i = 0; i < result.CardsToDraw; i++)
@@ -1529,6 +2120,148 @@ public class GameController : MonoBehaviour
             SpawnFloatingText($"+{result.CardsToDraw} CARD", slot.transform.position, Color.green, FeedbackCueType.Buff);
             SetStatus($"{card.CardName} drew {result.CardsToDraw} card{(result.CardsToDraw == 1 ? string.Empty : "s")} on deployment.");
         }
+
+        if (result.EnemyDeploymentCostIncrease > 0 || result.EnemyOperationCostIncrease > 0)
+        {
+            int amount = Mathf.Max(result.EnemyDeploymentCostIncrease, result.EnemyOperationCostIncrease);
+            if (amount > 0)
+            {
+                GetOpponentState(owner.Side).ApplySignalLostPenalty(amount);
+                SpawnFloatingText($"OP/DEPLOY +{amount}", slot.transform.position, Color.red, FeedbackCueType.Countermeasure);
+                SetStatus($"{owner.Side} order increased enemy deploy/attack costs by {amount}.");
+            }
+        }
+
+        if (result.FriendlyDefenseGain != 0)
+        {
+            ApplyDefenseGainToFriendlyUnits(owner, result.FriendlyDefenseGain);
+            SpawnFloatingText($"DEF +{result.FriendlyDefenseGain}", slot.transform.position, Color.cyan, FeedbackCueType.Buff);
+        }
+
+        if (result.DrawForCardsPlayed && result.DrawForCardsPlayedAmount > 0)
+        {
+            int totalDraws = owner.CardsPlayedThisTurn * Mathf.Max(1, result.DrawForCardsPlayedAmount);
+            for (int i = 0; i < totalDraws; i++)
+            {
+                DrawCard(owner);
+            }
+
+            if (totalDraws > 0)
+            {
+                SpawnFloatingText($"+{totalDraws} CARD", slot.transform.position, Color.green, FeedbackCueType.Buff);
+                SetStatus($"{card.CardName} drew {totalDraws} cards.");
+            }
+        }
+    }
+
+    private RuntimeCard FindCardTemplateByName(string cardName)
+    {
+        RuntimeCard[] templates = StarterTemplates(selectedPlayerDeck);
+        for (int i = 0; i < templates.Length; i++)
+        {
+            if (templates[i].CardName == cardName)
+            {
+                return templates[i];
+            }
+        }
+
+        templates = StarterTemplates(selectedEnemyDeck);
+        for (int i = 0; i < templates.Length; i++)
+        {
+            if (templates[i].CardName == cardName)
+            {
+                return templates[i];
+            }
+        }
+
+        return null;
+    }
+
+    private void ApplyDefenseGainToFriendlyUnits(PlayerState owner, int amount)
+    {
+        if (owner == null || amount == 0)
+        {
+            return;
+        }
+
+        foreach (RuntimeCard card in cardSlots.Keys)
+        {
+            if (card == null || card.Owner != owner.Side || card.Zone != CardZone.PlayerSupport && card.Zone != CardZone.Frontline)
+            {
+                continue;
+            }
+
+            card.CurrentDefense += amount;
+        }
+    }
+
+    private void ResolveFieldIntelDraws(PlayerState state)
+    {
+        if (state == null)
+        {
+            return;
+        }
+
+        while (state.ConsumeFieldIntelDraw())
+        {
+            DrawCard(state);
+        }
+    }
+
+    private int EffectiveOperationCost(RuntimeCard card)
+    {
+        if (card == null)
+        {
+            return int.MaxValue;
+        }
+
+        int effectiveCost = GetState(card.Owner).EffectiveOperationCost(card.OperationCost);
+        if (card.CardName == GilbertaUnitName)
+        {
+            PlayerState ownerState = GetState(card.Owner);
+            if (ownerState.GilbertaAuraSources > 0)
+            {
+                effectiveCost += 1;
+            }
+        }
+
+        return effectiveCost;
+    }
+
+    private int EffectiveOperationCostForAction(RuntimeCard card)
+    {
+        return card == null ? int.MaxValue : EffectiveOperationCost(card);
+    }
+
+    private bool CanSpendUnitOperation(RuntimeCard card, int availableKredits, out int effectiveCost)
+    {
+        if (card == null || card.Type != CardType.Unit)
+        {
+            effectiveCost = int.MaxValue;
+            return false;
+        }
+
+        effectiveCost = EffectiveOperationCostForAction(card);
+        return KreditRules.CanSpend(availableKredits, effectiveCost);
+    }
+
+    private RuntimeCard Unit(
+        string name,
+        string nation,
+        int cost,
+        int attack,
+        int defense,
+        int operationCost,
+        CardKeyword keywords,
+        CardTrigger trigger,
+        CardEffectType effectType,
+        int effectAmount,
+        string text,
+        string addedCardName)
+    {
+        RuntimeCard card = Unit(name, nation, cost, attack, defense, operationCost, keywords, trigger, effectType, effectAmount, text);
+        card.AddedCardName = addedCardName;
+        return card;
     }
 
     private RuntimeCard Unit(string name, string nation, int cost, int attack, int defense, int operationCost, CardKeyword keywords, string text)
@@ -1615,6 +2348,7 @@ public class GameController : MonoBehaviour
         activeSide = side;
         phase = side == PlayerSide.Player ? GamePhase.PlayerTurn : GamePhase.EnemyTurn;
         PlayerState state = GetState(side);
+        ResolveFieldIntelDraws(state);
         state.StartTurn();
         ReadyUnits(side);
         DrawCard(state);
@@ -1686,7 +2420,6 @@ public class GameController : MonoBehaviour
             }
 
             hasAffordableCard = true;
-            selectedCard = card;
             if (card.Type == CardType.Unit)
             {
                 SlotInteract slot = FindEmptySlot(SlotZone.PlayerSupport);
@@ -1696,8 +2429,14 @@ public class GameController : MonoBehaviour
                     continue;
                 }
 
-                TryDeploySelectedUnit(slot);
-                return true;
+                selectedCard = card;
+                if (TryDeploySelectedUnit(slot))
+                {
+                    return true;
+                }
+
+                ClearSelection();
+                continue;
             }
 
             if (card.Type == CardType.Countermeasure)
@@ -1715,8 +2454,13 @@ public class GameController : MonoBehaviour
                     continue;
                 }
 
-                TryPlayOrderOnSlot(target);
-                return true;
+                selectedCard = card;
+                if (TryPlayOrderOnSlot(target))
+                {
+                    return true;
+                }
+
+                ClearSelection();
             }
         }
 
@@ -1768,7 +2512,7 @@ public class GameController : MonoBehaviour
             }
 
             hasSupportUnit = true;
-            if (!player.CanSpendKredits(card.OperationCost))
+            if (!CanSpendUnitOperation(card, player.Kredits, out _))
             {
                 needsKredits = true;
                 continue;
@@ -1787,10 +2531,15 @@ public class GameController : MonoBehaviour
             }
 
             selectedCard = card;
-            TryMoveToFrontline(destination);
-            return true;
+            if (TryMoveToFrontline(destination))
+            {
+                return true;
+            }
+
+            ClearSelection();
         }
 
+        ClearSelection();
         if (showFailure)
         {
             SetStatus(SceneGuidanceRules.NoAdvanceShortcutPrompt(hasSupportUnit, needsKredits, pinned, alreadyActed, frontlineBlocked, false));
@@ -1828,7 +2577,7 @@ public class GameController : MonoBehaviour
             }
 
             hasFrontlineUnit = true;
-            if (!player.CanSpendKredits(card.OperationCost))
+            if (!CanSpendUnitOperation(card, player.Kredits, out _))
             {
                 needsKredits = true;
                 continue;
@@ -1847,7 +2596,6 @@ public class GameController : MonoBehaviour
                 continue;
             }
 
-            selectedCard = card;
             SlotInteract target = FindQuickAttackTarget(card);
             if (target == null)
             {
@@ -1855,10 +2603,16 @@ public class GameController : MonoBehaviour
                 continue;
             }
 
-            TryAttack(target);
-            return true;
+            selectedCard = card;
+            if (TryAttack(target))
+            {
+                return true;
+            }
+
+            ClearSelection();
         }
 
+        ClearSelection();
         if (showFailure)
         {
             SetStatus(SceneGuidanceRules.NoAttackShortcutPrompt(hasFrontlineUnit, needsKredits, pinned, alreadyAttacked, missingTarget));
@@ -1898,6 +2652,7 @@ public class GameController : MonoBehaviour
         switch (card.EffectType)
         {
             case CardEffectType.DamageTargetUnit:
+            case CardEffectType.DamageTargetUnitAndAdjacent:
             case CardEffectType.PinTargetUnit:
                 return FindOccupiedSlot(SlotZone.EnemySupport, PlayerSide.Enemy) ?? FindOccupiedSlot(SlotZone.Frontline, PlayerSide.Enemy);
             case CardEffectType.BuffFriendlyUnit:
@@ -1956,6 +2711,11 @@ public class GameController : MonoBehaviour
         state.Deck.RemoveAt(0);
         card.Zone = CardZone.Hand;
         state.Hand.Add(card);
+        pendingDrawAnimations.Add(new PendingDrawAnimation
+        {
+            CardId = card.Id,
+            Side = state.Side
+        });
     }
 
     private void ReadyUnits(PlayerSide side)
@@ -1988,9 +2748,37 @@ public class GameController : MonoBehaviour
             HighlightLegalTargets(selectedCard, false);
         }
 
+        if (pendingAirborneUnit != null)
+        {
+            HighlightAirborneDeploymentTargets(pendingAirborneUnit, false);
+            pendingAirborneUnit = null;
+        }
+
         selectedCard = null;
         selectedView?.SetSelected(false);
         selectedView = null;
+    }
+
+    private void RejectSelectedHandCard(string message)
+    {
+        SetStatus(message);
+        centerInspectCard = null;
+        CancelAllCardPointerInteractions();
+        ClearSelection();
+        ClearDragPreview();
+        RefreshSceneInspector();
+        RefreshAllViews();
+    }
+
+    private void CancelAllCardPointerInteractions()
+    {
+        foreach (CardView view in cardViews)
+        {
+            if (view != null)
+            {
+                view.CancelPointerInteraction();
+            }
+        }
     }
 
     private void TrySelectUnitInSlot(SlotInteract slot)
@@ -2004,91 +2792,217 @@ public class GameController : MonoBehaviour
         SelectCard(slot.Occupant, view);
     }
 
-    private void TryDeploySelectedUnit(SlotInteract slot)
+    private bool TryDeploySelectedUnit(SlotInteract slot)
     {
         bool canMobilizeToFrontline = selectedCard.HasKeyword(CardKeyword.Mobilize)
             && slot.Zone == SlotZone.Frontline
             && (!hasFrontlineController || frontlineController == selectedCard.Owner);
         bool canDeployToSupport = slot.Zone == SlotZone.PlayerSupport;
 
-        if ((!canDeployToSupport && !canMobilizeToFrontline) || slot.IsOccupied)
+        if ((!canDeployToSupport && !canMobilizeToFrontline) || slot.IsOccupied || BoardTargetRules.IsHeadquartersSlot(slot))
         {
-            SetStatus(SceneGuidanceRules.IllegalDeployTargetPrompt(selectedCard, slot.Zone, slot.IsOccupied, hasFrontlineController, frontlineController));
+            RejectSelectedHandCard(SceneGuidanceRules.IllegalDeployTargetPrompt(selectedCard, slot.Zone, slot.IsOccupied, hasFrontlineController, frontlineController));
+            return false;
+        }
+
+        int deploymentCost = player.EffectiveDeploymentCost(selectedCard);
+        if (!player.TrySpendDeploymentCost(deploymentCost))
+        {
+            RejectSelectedHandCard(SceneGuidanceRules.CannotAffordCardPrompt(selectedCard, "deploy", player.Kredits));
+            return false;
+        }
+
+        Vector3 deployFrom = selectedView != null
+            ? selectedView.transform.position
+            : HandPosition(PlayerSide.Player, player.Hand.IndexOf(selectedCard), player.Hand.Count);
+        player.Hand.Remove(selectedCard);
+        UnitDeploymentRules.MarkDeployed(selectedCard);
+        pendingDeployDropCardId = selectedCard.Id;
+        PlaceCardInSlot(selectedCard, slot, slot.Zone == SlotZone.Frontline ? CardZone.Frontline : CardZone.PlayerSupport);
+        SpawnFloatingText("DEPLOY", slot.transform.position, Color.cyan);
+        player.RegisterCardPlayed();
+        DrawCard(player);
+        ResolveDeploymentEffect(player, selectedCard, slot);
+        if (DeployStrikeRules.ShouldTriggerStrike(selectedCard))
+        {
+            board.TriggerStrike(slot.X, slot.Zone);
+        }
+
+        UpdateFrontlineControl();
+        SetStatus(SceneGuidanceRules.AfterDeployPrompt(selectedCard));
+        ClearSelection();
+        RefreshAllViews();
+        CardView deployedView = FindView(selectedCard);
+        if (deployedView != null)
+        {
+            deployedView.PlayDeployDrop(deployFrom, slot.transform.position + Vector3.up * PlayableSceneRules.BoardCardHeight);
+            deployedView.RefreshKeywordIcons(true);
+        }
+
+        pendingDeployDropCardId = null;
+        return true;
+    }
+
+    private void TryPlayAirborneDeployment(SlotInteract slot)
+    {
+        if (selectedCard == null || selectedCard.Type != CardType.Order || selectedCard.EffectType != CardEffectType.DeployWithBlitz || pendingAirborneUnit == null)
+        {
+            SetStatus("AIRBORNE: SELECT AN ORDER IN HAND AND THEN A TARGET UNIT.");
+            return;
+        }
+
+        if (!player.CanSpendKredits(selectedCard.KreditCost))
+        {
+            RejectSelectedHandCard(SceneGuidanceRules.CannotAffordCardPrompt(selectedCard, "play airborne", player.Kredits));
+            return;
+        }
+
+        if (slot == null || slot.IsOccupied || BoardTargetRules.IsHeadquartersSlot(slot) || !IsEmptyZoneForAirborneDeployment(slot))
+        {
+            RejectSelectedHandCard("AIRBORNE: SELECT AN EMPTY SUPPORT OR FRONTLINE SLOT.");
+            return;
+        }
+
+        if (!player.Hand.Contains(pendingAirborneUnit))
+        {
+            SetStatus("AIRBORNE: SELECTED UNIT NO LONGER IN HAND.");
+            pendingAirborneUnit = null;
+            ClearSelection();
             return;
         }
 
         if (!player.TrySpendKredits(selectedCard.KreditCost))
         {
-            SetStatus(SceneGuidanceRules.CannotAffordCardPrompt(selectedCard, "deploy", player.Kredits));
+            RejectSelectedHandCard(SceneGuidanceRules.CannotAffordCardPrompt(selectedCard, "play airborne", player.Kredits));
             return;
         }
 
         player.Hand.Remove(selectedCard);
-        UnitDeploymentRules.MarkDeployed(selectedCard);
-        PlaceCardInSlot(selectedCard, slot, slot.Zone == SlotZone.Frontline ? CardZone.Frontline : CardZone.PlayerSupport);
-        SpawnFloatingText("DEPLOY", slot.transform.position, Color.cyan);
-        ResolveDeploymentEffect(player, selectedCard, slot);
+        selectedCard.Zone = CardZone.Discard;
+        player.Discard.Add(selectedCard);
+
+        RuntimeCard unit = pendingAirborneUnit;
+        player.Hand.Remove(unit);
+
+        if (!unit.HasKeyword(CardKeyword.Blitz))
+        {
+            unit.AddKeyword(CardKeyword.Blitz);
+        }
+
+        unit.Zone = CardZone.Frontline;
+        pendingDeployDropCardId = unit.Id;
+        PlaceCardInSlot(unit, slot, slot.Zone == SlotZone.Frontline ? CardZone.Frontline : CardZone.PlayerSupport);
+        SpawnFloatingText("AIRBORNE", slot.transform.position, Color.cyan);
+        player.RegisterCardPlayed();
+        DrawCard(player);
+        ResolveDeploymentEffect(player, unit, slot);
+
+        if (DeployStrikeRules.ShouldTriggerStrike(unit))
+        {
+            board.TriggerStrike(slot.X, slot.Zone);
+        }
+
+        pendingAirborneUnit = null;
         UpdateFrontlineControl();
-        SetStatus(SceneGuidanceRules.AfterDeployPrompt(selectedCard));
+        SetStatus(SceneGuidanceRules.AfterDeployPrompt(unit));
+        HighlightAirborneDeploymentTargets(null, false);
         ClearSelection();
         RefreshAllViews();
+        CardView deployedView = FindView(unit);
+        if (deployedView != null)
+        {
+            deployedView.PlayDeployDrop(selectedView != null ? selectedView.transform.position : HandPosition(PlayerSide.Player, 0, 1), slot.transform.position + Vector3.up * PlayableSceneRules.BoardCardHeight);
+            deployedView.RefreshKeywordIcons(true);
+        }
+
+        pendingDeployDropCardId = null;
+    }
+
+    private bool IsEmptyZoneForAirborneDeployment(SlotInteract slot)
+    {
+        if (slot == null || slot.IsOccupied || BoardTargetRules.IsHeadquartersSlot(slot))
+        {
+            return false;
+        }
+
+        return slot.Zone == SlotZone.PlayerSupport || slot.Zone == SlotZone.Frontline;
+    }
+
+    private void HighlightAirborneDeploymentTargets(RuntimeCard unit, bool highlighted)
+    {
+        if (unit != null && highlighted)
+        {
+            HighlightEmptySlots(SlotZone.PlayerSupport, true, SlotHighlightLabelRules.LabelFor(unit, SlotZone.PlayerSupport));
+            HighlightEmptySlots(SlotZone.Frontline, true, SlotHighlightLabelRules.LabelFor(unit, SlotZone.Frontline));
+            return;
+        }
+
+        HighlightEmptySlots(SlotZone.PlayerSupport, false);
+        HighlightEmptySlots(SlotZone.Frontline, false);
     }
 
     private void TrySetCountermeasure(PlayerState state, RuntimeCard card)
     {
         if (!state.CanSpendKredits(card.KreditCost))
         {
-            SetStatus(SceneGuidanceRules.CannotAffordCardPrompt(card, "set counter", state.Kredits));
+            RejectSelectedHandCard(SceneGuidanceRules.CannotAffordCardPrompt(card, "set counter", state.Kredits));
             return;
         }
 
         if (state.Countermeasures.Count >= 3)
         {
-            SetStatus(SceneGuidanceRules.CountermeasureRowFullPrompt(card));
+            RejectSelectedHandCard(SceneGuidanceRules.CountermeasureRowFullPrompt(card));
             return;
         }
 
         if (!state.TrySpendKredits(card.KreditCost))
         {
-            SetStatus(SceneGuidanceRules.CannotAffordCardPrompt(card, "set counter", state.Kredits));
+            RejectSelectedHandCard(SceneGuidanceRules.CannotAffordCardPrompt(card, "set counter", state.Kredits));
             return;
         }
 
         state.Hand.Remove(card);
         card.Zone = CardZone.Countermeasure;
         state.Countermeasures.Add(card);
+        if (card.EffectType == CardEffectType.FieldIntel)
+        {
+            state.MarkFieldIntelPending();
+        }
+
         SpawnFloatingText("COUNTER", CountermeasureFeedbackPosition(state), Color.magenta);
         SetStatus(state.Side == PlayerSide.Player ? SceneGuidanceRules.AfterCountermeasurePrompt(card) : "Enemy set a countermeasure.");
         ClearSelection();
         RefreshAllViews();
     }
 
-    private void TryPlayOrderOnSlot(SlotInteract slot)
+    private bool TryPlayOrderOnSlot(SlotInteract slot)
     {
         if (selectedCard == null || selectedCard.Type != CardType.Order)
         {
-            return;
+            return false;
         }
 
         if (!player.CanSpendKredits(selectedCard.KreditCost))
         {
-            SetStatus(SceneGuidanceRules.CannotAffordCardPrompt(selectedCard, "play order", player.Kredits));
-            return;
+            RejectSelectedHandCard(SceneGuidanceRules.CannotAffordCardPrompt(selectedCard, "play order", player.Kredits));
+            return false;
         }
 
         if (!IsLegalOrderTarget(selectedCard, slot, PlayerSide.Player))
         {
-            SetStatus(SceneGuidanceRules.IllegalOrderTargetPrompt(selectedCard, slot != null ? slot.Occupant : null, PlayerSide.Player));
-            return;
+            RejectSelectedHandCard(SceneGuidanceRules.IllegalOrderTargetPrompt(selectedCard, slot != null ? slot.Occupant : null, PlayerSide.Player));
+            return false;
         }
 
         PlayOrder(player, selectedCard, slot);
         ClearSelection();
         RefreshAllViews();
+        return true;
     }
 
     private void PlayOrder(PlayerState caster, RuntimeCard order, SlotInteract targetSlot)
     {
+        caster.RegisterCardPlayed();
         if (!caster.TrySpendKredits(order.KreditCost))
         {
             SetStatus(SceneGuidanceRules.CannotAffordCardPrompt(order, "play order", caster.Kredits));
@@ -2109,6 +3023,13 @@ public class GameController : MonoBehaviour
             case CardEffectType.DamageTargetUnit:
                 DamageUnit(targetSlot.Occupant, order.EffectAmount, order.CardName);
                 break;
+            case CardEffectType.DamageTargetUnitAndAdjacent:
+                if (targetSlot != null)
+                {
+                    ResolveAreaDamageOrder(order, targetSlot);
+                }
+                SetStatus(SceneGuidanceRules.AfterOrderPrompt(order));
+                break;
             case CardEffectType.RepairHeadquarters:
                 caster.HeadquartersHealth = Mathf.Min(20, caster.HeadquartersHealth + order.EffectAmount);
                 SpawnFloatingText($"+{order.EffectAmount} HQ", HeadquartersMarker(caster.Side), Color.green);
@@ -2120,6 +3041,12 @@ public class GameController : MonoBehaviour
                     DrawCard(caster);
                 }
                 SetStatus(SceneGuidanceRules.AfterOrderPrompt(order));
+                break;
+            case CardEffectType.IncreaseEnemyCosts:
+                GetOpponentState(caster.Side).ApplySignalLostPenalty(1);
+                SetStatus(SceneGuidanceRules.AfterOrderPrompt(order));
+                break;
+            case CardEffectType.FieldIntel:
                 break;
             case CardEffectType.BuffFriendlyUnit:
                 targetSlot.Occupant.Attack += order.EffectAmount;
@@ -2137,25 +3064,89 @@ public class GameController : MonoBehaviour
         }
 
         CheckGameOver();
+        StartCoroutine(ShowPlayedOrder(order));
     }
 
-    private void TryMoveToFrontline(SlotInteract destination)
+    private void ResolveAreaDamageOrder(RuntimeCard order, SlotInteract targetSlot)
+    {
+        if (order == null || targetSlot == null || !targetSlot.IsOccupied)
+        {
+            return;
+        }
+
+        DamageUnit(targetSlot.Occupant, order.EffectAmount, order.CardName);
+
+        if (board == null)
+        {
+            return;
+        }
+
+        ResolveAdjacentOrderDamage(order, board.GetSlot(targetSlot.X - 1, targetSlot.Zone));
+        ResolveAdjacentOrderDamage(order, board.GetSlot(targetSlot.X + 1, targetSlot.Zone));
+    }
+
+    private void ResolveAdjacentOrderDamage(RuntimeCard order, SlotInteract slot)
+    {
+        if (order == null || slot == null || !slot.IsOccupied || slot.Occupant == null)
+        {
+            return;
+        }
+
+        DamageUnit(slot.Occupant, order.EffectAmount, order.CardName);
+    }
+
+    private System.Collections.IEnumerator ShowPlayedOrder(RuntimeCard order)
+    {
+        CardView displayView = CreateTransientCardView(order);
+        displayView.SetInteractionEnabled(false);
+        displayView.SetDragEnabled(false);
+        displayView.SetLayout(
+            PlayableSceneRules.OrderDisplayAnchor,
+            new Vector3(PlayableSceneRules.OrderDisplayScale, 1f, PlayableSceneRules.OrderDisplayScale),
+            Quaternion.identity,
+            false);
+        displayView.SetDetailPresentation();
+        yield return new WaitForSeconds(PlayableSceneRules.OrderDisplaySeconds);
+        float elapsed = 0f;
+        Vector3 start = displayView.transform.position;
+        Vector3 end = DiscardWorldPosition(order.Owner);
+        while (elapsed < PlayableSceneRules.OrderFlyOffSeconds)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / PlayableSceneRules.OrderFlyOffSeconds);
+            Vector3 position = Vector3.Lerp(start, end, t);
+            position.y += Mathf.Sin(t * Mathf.PI) * 0.24f;
+            displayView.transform.position = position;
+            displayView.transform.localScale = Vector3.Lerp(
+                new Vector3(PlayableSceneRules.OrderDisplayScale, 1f, PlayableSceneRules.OrderDisplayScale),
+                new Vector3(PlayableSceneRules.BoardCardScale, 1f, PlayableSceneRules.BoardCardScale),
+                t);
+            yield return null;
+        }
+
+        if (displayView != null)
+        {
+            RuntimeSafeDestroy.Destroy(displayView.gameObject);
+        }
+    }
+
+    private bool TryMoveToFrontline(SlotInteract destination)
     {
         if (destination.IsOccupied)
         {
             SetStatus("That frontline slot is occupied.");
-            return;
+            return false;
         }
 
         if (!CanMoveToFrontline(selectedCard))
         {
-            return;
+            return false;
         }
 
-        if (!player.TrySpendKredits(selectedCard.OperationCost))
+        if (!player.TrySpendKredits(EffectiveOperationCostForAction(selectedCard)))
         {
             SetStatus(SceneGuidanceRules.CannotAdvancePrompt(selectedCard, player.Kredits));
-            return;
+            return false;
         }
 
         MoveCardToSlot(selectedCard, destination, CardZone.Frontline);
@@ -2165,11 +3156,18 @@ public class GameController : MonoBehaviour
         SetStatus(SceneGuidanceRules.AfterAdvancePrompt(selectedCard, player.Kredits));
         ClearSelection();
         RefreshAllViews();
+        return true;
     }
 
     private bool CanMoveToFrontline(RuntimeCard card)
     {
-        if (!card.CanOperate(player.Kredits))
+        if (!CanSpendUnitOperation(card, player.Kredits, out int requiredOperationCost))
+        {
+            SetStatus(SceneGuidanceRules.CannotAdvancePrompt(card, player.Kredits));
+            return false;
+        }
+
+        if (requiredOperationCost > player.Kredits)
         {
             SetStatus(SceneGuidanceRules.CannotAdvancePrompt(card, player.Kredits));
             return false;
@@ -2184,35 +3182,41 @@ public class GameController : MonoBehaviour
         return true;
     }
 
-    private void TryAttack(SlotInteract targetSlot)
+    private bool TryAttack(SlotInteract targetSlot)
     {
         if (!CanAttack(selectedCard, player.Kredits))
         {
             SetStatus(SceneGuidanceRules.CannotAttackPrompt(selectedCard, player.Kredits));
-            return;
+            return false;
         }
 
         if (!IsLegalAttackTarget(selectedCard, targetSlot))
         {
             bool defenderHasGuard = selectedCard != null && HasGuardUnit(GetOpponentState(selectedCard.Owner).Side);
             SetStatus(SceneGuidanceRules.IllegalAttackTargetPrompt(selectedCard, targetSlot != null ? targetSlot.Occupant : null, targetSlot != null ? targetSlot.Zone : SlotZone.Frontline, defenderHasGuard));
-            return;
+            return false;
         }
 
-        if (!player.TrySpendKredits(selectedCard.OperationCost))
+        if (!player.TrySpendKredits(EffectiveOperationCostForAction(selectedCard)))
         {
             SetStatus(SceneGuidanceRules.CannotAttackPrompt(selectedCard, player.Kredits));
-            return;
+            return false;
         }
 
         ResolveAttack(selectedCard, targetSlot);
         ClearSelection();
         RefreshAllViews();
+        return true;
     }
 
     private bool CanAttack(RuntimeCard attacker, int availableKredits)
     {
-        if (attacker == null || attacker.Type != CardType.Unit || attacker.Zone != CardZone.Frontline || attacker.HasActed || attacker.HasKeyword(CardKeyword.Pinned) || !KreditRules.CanSpend(availableKredits, attacker.OperationCost))
+        if (attacker == null || attacker.Type != CardType.Unit || attacker.Zone != CardZone.Frontline || attacker.HasActed || attacker.HasKeyword(CardKeyword.Pinned))
+        {
+            return false;
+        }
+
+        if (!CanSpendUnitOperation(attacker, availableKredits, out _))
         {
             return false;
         }
@@ -2245,7 +3249,7 @@ public class GameController : MonoBehaviour
             return !enemyHasGuard || targetSlot.Occupant.HasKeyword(CardKeyword.Guard);
         }
 
-        return BoardTargetRules.IsHeadquartersSlot(targetSlot.X) && !enemyHasGuard;
+        return BoardTargetRules.IsHeadquartersSlot(targetSlot) && !enemyHasGuard;
     }
 
     private void ResolveAttack(RuntimeCard attacker, SlotInteract targetSlot)
@@ -2324,16 +3328,15 @@ public class GameController : MonoBehaviour
 
     private void ResolveCombat(RuntimeCard attacker, RuntimeCard defender)
     {
-        int damageToDefender = ModifiedDamage(attacker.Attack, defender);
-        int damageToAttacker = ModifiedDamage(defender.Attack, attacker);
+        CombatResolution plan = CombatRules.Plan(attacker, defender);
 
-        if (defender.HasKeyword(CardKeyword.Ambush) && defender.AttacksThisTurn == 0)
+        if (plan.AmbushFirstStrike)
         {
-            attacker.CurrentDefense -= damageToAttacker;
+            attacker.CurrentDefense -= plan.DamageToAttacker;
             defender.AttacksThisTurn++;
             if (cardSlots.TryGetValue(attacker, out SlotInteract ambushTargetSlot))
             {
-                SpawnFloatingText($"AMBUSH -{damageToAttacker}", ambushTargetSlot.transform.position, Color.magenta, FeedbackCueType.Countermeasure);
+                SpawnFloatingText($"AMBUSH -{plan.DamageToAttacker}", ambushTargetSlot.transform.position, Color.magenta, FeedbackCueType.Countermeasure);
             }
 
             if (!attacker.IsAlive)
@@ -2343,19 +3346,25 @@ public class GameController : MonoBehaviour
                 CheckGameOver();
                 return;
             }
+
+            defender.CurrentDefense -= plan.DamageToDefender;
+        }
+        else
+        {
+            defender.CurrentDefense -= plan.DamageToDefender;
+            attacker.CurrentDefense -= plan.DamageToAttacker;
         }
 
-        defender.CurrentDefense -= damageToDefender;
-        attacker.CurrentDefense -= damageToAttacker;
         if (cardSlots.TryGetValue(defender, out SlotInteract defenderSlot))
         {
-            SpawnFloatingText($"-{damageToDefender}", defenderSlot.transform.position, Color.red, FeedbackCueType.Attack);
+            SpawnFloatingText($"-{plan.DamageToDefender}", defenderSlot.transform.position, Color.red, FeedbackCueType.Attack);
         }
         if (cardSlots.TryGetValue(attacker, out SlotInteract combatAttackerSlot))
         {
-            SpawnFloatingText($"-{damageToAttacker}", combatAttackerSlot.transform.position, Color.red);
+            SpawnFloatingText($"-{plan.DamageToAttacker}", combatAttackerSlot.transform.position, Color.red);
         }
         SetStatus(SceneGuidanceRules.AfterAttackPrompt(attacker, GetState(attacker.Owner).Kredits));
+        ApplyM3AttackDefenseAura(attacker);
 
         if (!defender.IsAlive)
         {
@@ -2368,6 +3377,33 @@ public class GameController : MonoBehaviour
         }
 
         CheckGameOver();
+    }
+
+    private void ApplyM3AttackDefenseAura(RuntimeCard attacker)
+    {
+        if (attacker == null || attacker.CardName != M3UnitName || !attacker.IsAlive)
+        {
+            return;
+        }
+
+        foreach (RuntimeCard friendly in cardSlots.Keys)
+        {
+            if (friendly == null || friendly == attacker || friendly.Owner != attacker.Owner)
+            {
+                continue;
+            }
+
+            if (friendly.Zone != CardZone.Frontline && friendly.Zone != CardZone.PlayerSupport)
+            {
+                continue;
+            }
+
+            friendly.CurrentDefense += 1;
+            if (cardSlots.TryGetValue(friendly, out SlotInteract friendlySlot))
+            {
+                SpawnFloatingText("+1 DEF", friendlySlot.transform.position, Color.cyan, FeedbackCueType.Buff);
+            }
+        }
     }
 
     private void DamageUnit(RuntimeCard target, int amount, string sourceName)
@@ -2395,12 +3431,7 @@ public class GameController : MonoBehaviour
 
     private int ModifiedDamage(int amount, RuntimeCard target)
     {
-        if (target != null && target.HasKeyword(CardKeyword.HeavyArmor))
-        {
-            return Mathf.Max(0, amount - 1);
-        }
-
-        return amount;
+        return CombatRules.ModifiedDamage(amount, target);
     }
 
     private void PlaceCardInSlot(RuntimeCard card, SlotInteract slot, CardZone zone)
@@ -2422,14 +3453,42 @@ public class GameController : MonoBehaviour
 
     private void DestroyCard(RuntimeCard card)
     {
+        Vector3 discardFlightStart = Vector3.zero;
+        bool hasDiscardFlightStart = false;
         if (cardSlots.TryGetValue(card, out SlotInteract slot))
         {
+            discardFlightStart = slot.transform.position + Vector3.up * PlayableSceneRules.BoardCardHeight;
+            hasDiscardFlightStart = true;
             slot.ClearOccupant(card);
             cardSlots.Remove(card);
         }
 
+        if (hasDiscardFlightStart)
+        {
+            PlayDiscardFlight(card, discardFlightStart);
+        }
+
         GetState(card.Owner).Discard.Add(card);
         card.Zone = CardZone.Discard;
+    }
+
+    private void PlayDiscardFlight(RuntimeCard card, Vector3 startPosition)
+    {
+        if (card == null)
+        {
+            return;
+        }
+
+        CardView flightView = CreateTransientCardView(card);
+        flightView.SetInteractionEnabled(false);
+        flightView.SetDragEnabled(false);
+        flightView.SetLayout(
+            startPosition,
+            new Vector3(PlayableSceneRules.BoardCardScale, 1f, PlayableSceneRules.BoardCardScale),
+            Quaternion.identity,
+            false);
+        flightView.PlayMulliganDiscardFlight(startPosition, DiscardWorldPosition(card.Owner));
+        StartCoroutine(DestroyTransientViewAfterDelay(flightView, CardMotionRules.MulliganDiscardFlightSeconds + 0.08f));
     }
 
     private void EnemyPlaySimpleOrder()
@@ -2482,6 +3541,7 @@ public class GameController : MonoBehaviour
             case CardEffectType.DamageEnemyHeadquarters:
                 return player.HeadquartersHealth <= order.EffectAmount ? 100 : 12 + order.EffectAmount * 2;
             case CardEffectType.DamageTargetUnit:
+            case CardEffectType.DamageTargetUnitAndAdjacent:
                 return target != null && target.IsOccupied ? TargetPriority(target.Occupant) + order.EffectAmount * 4 : -999;
             case CardEffectType.PinTargetUnit:
                 return target != null && target.IsOccupied ? TargetPriority(target.Occupant) + 6 : -999;
@@ -2502,6 +3562,7 @@ public class GameController : MonoBehaviour
         {
             case CardEffectType.DamageTargetUnit:
             case CardEffectType.PinTargetUnit:
+            case CardEffectType.DamageTargetUnitAndAdjacent:
                 return FindHighestPriorityTarget(PlayerSide.Player);
             case CardEffectType.BuffFriendlyUnit:
                 return FindHighestValueFriendlyUnit(PlayerSide.Enemy);
@@ -2536,6 +3597,7 @@ public class GameController : MonoBehaviour
         PlaceCardInSlot(card, slot, slot.Zone == SlotZone.Frontline ? CardZone.Frontline : CardZone.EnemySupport);
         SpawnFloatingText("DEPLOY", slot.transform.position, Color.red);
         ResolveDeploymentEffect(enemy, card, slot);
+        DrawCard(enemy);
         SetStatus($"Enemy deployed {card.CardName}.");
         RefreshAllViews();
     }
@@ -2868,6 +3930,7 @@ public class GameController : MonoBehaviour
             case CardEffectType.DrawCards:
                 return true;
             case CardEffectType.DamageTargetUnit:
+            case CardEffectType.DamageTargetUnitAndAdjacent:
             case CardEffectType.PinTargetUnit:
                 return slot != null && slot.IsOccupied && slot.Occupant.Owner != caster && !slot.Occupant.HasKeyword(CardKeyword.Smokescreen);
             case CardEffectType.BuffFriendlyUnit:
@@ -2879,7 +3942,10 @@ public class GameController : MonoBehaviour
 
     private bool OrderNeedsTarget(RuntimeCard order)
     {
-        return order.EffectType == CardEffectType.DamageTargetUnit || order.EffectType == CardEffectType.PinTargetUnit || order.EffectType == CardEffectType.BuffFriendlyUnit;
+        return order.EffectType == CardEffectType.DamageTargetUnit
+            || order.EffectType == CardEffectType.DamageTargetUnitAndAdjacent
+            || order.EffectType == CardEffectType.PinTargetUnit
+            || order.EffectType == CardEffectType.BuffFriendlyUnit;
     }
 
     private SlotInteract FindEmptySlot(SlotZone zone)
@@ -2888,7 +3954,7 @@ public class GameController : MonoBehaviour
         for (int x = 0; x < count; x++)
         {
             SlotInteract slot = board.GetSlot(x, zone);
-            if (slot != null && !slot.IsOccupied)
+            if (slot != null && !slot.IsOccupied && !BoardTargetRules.IsHeadquartersSlot(slot))
             {
                 return slot;
             }
@@ -3127,7 +4193,7 @@ public class GameController : MonoBehaviour
 
     private void HighlightEmptySlots(SlotZone zone, bool highlighted, string label)
     {
-        HighlightSlots(zone, slot => !slot.IsOccupied, highlighted, label);
+        HighlightSlots(zone, slot => !slot.IsOccupied && !BoardTargetRules.IsHeadquartersSlot(slot), highlighted, label);
     }
 
     private void HighlightAllSlots(bool highlighted)
@@ -3165,7 +4231,27 @@ public class GameController : MonoBehaviour
         RefreshSceneInspector();
         RefreshSceneDeckSummary();
         RefreshSceneCommandButtons();
+        ResyncSelectionVisuals();
+        if (ShouldMutateRuntime())
+        {
+            SceneHierarchyOrganizer.Organize();
+        }
     }
+
+#if UNITY_EDITOR
+    private bool ShouldMutateRuntime()
+    {
+        return Application.isPlaying
+            && !UnityEditor.EditorApplication.isCompiling
+            && !UnityEditor.EditorApplication.isUpdating
+            && !UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode;
+    }
+#else
+    private bool ShouldMutateRuntime()
+    {
+        return Application.isPlaying;
+    }
+#endif
 
     private void RefreshPileDisplays()
     {
@@ -3316,26 +4402,261 @@ public class GameController : MonoBehaviour
         return SceneCommandRules.IsAvailable(command, phase, activeSide, isResolvingEvents, board != null, hasValidDeck, mulliganUsed);
     }
 
+    private void HandleCardPointerFallbackInput()
+    {
+        if (Input.GetMouseButtonDown(0))
+        {
+            pointerFallbackCard = null;
+            pointerFallbackActive = false;
+
+            if (CardView.LastDirectMouseDownFrame == Time.frameCount)
+            {
+                return;
+            }
+
+            pointerFallbackCard = FindPointerCardFallback();
+            if (pointerFallbackCard != null && pointerFallbackCard.BeginPointerInteraction())
+            {
+                pointerFallbackActive = true;
+                lastSceneCommandPointerFrame = Time.frameCount;
+            }
+        }
+
+        if (pointerFallbackActive && Input.GetMouseButton(0) && pointerFallbackCard != null)
+        {
+            if (pointerFallbackCard.DragPointerInteraction())
+            {
+                lastSceneCommandPointerFrame = Time.frameCount;
+            }
+        }
+
+        if (!Input.GetMouseButtonUp(0))
+        {
+            return;
+        }
+
+        if (CardView.LastDirectMouseUpFrame == Time.frameCount)
+        {
+            pointerFallbackActive = false;
+            pointerFallbackCard = null;
+            return;
+        }
+
+        if (!pointerFallbackActive || pointerFallbackCard == null)
+        {
+            return;
+        }
+
+        pointerFallbackCard.EndPointerInteraction();
+
+        lastSceneCommandPointerFrame = Time.frameCount;
+        pointerFallbackActive = false;
+        pointerFallbackCard = null;
+    }
+
+    private CardView FindPointerCardFallback()
+    {
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null)
+        {
+            return null;
+        }
+
+        CardView bestView = null;
+        float bestDistance = float.MaxValue;
+        foreach (CardView view in cardViews)
+        {
+            if (view == null || !view.TryPointerScreenDistance(mainCamera, out float distance))
+            {
+                continue;
+            }
+
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestView = view;
+            }
+        }
+
+        if (bestView != null)
+        {
+            return bestView;
+        }
+
+        if (sceneCommandButtons.Count == 0)
+        {
+            sceneCommandButtons.AddRange(FindObjectsOfType<SceneCommandButton>());
+        }
+
+        foreach (SceneCommandButton button in sceneCommandButtons)
+        {
+            if (button == null)
+            {
+                continue;
+            }
+
+            bool available = IsSceneCommandAvailable(button.Command);
+            if (IsSceneCommandVisible(button.Command, available) && TryPointerSceneCommandDistance(button, mainCamera, out _))
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private void HandleSceneCommandPointerInput()
+    {
+        if (!Input.GetMouseButtonUp(0) || lastSceneCommandPointerFrame == Time.frameCount)
+        {
+            return;
+        }
+
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null)
+        {
+            return;
+        }
+
+        if (sceneCommandButtons.Count == 0)
+        {
+            sceneCommandButtons.AddRange(FindObjectsOfType<SceneCommandButton>());
+        }
+
+        SceneCommandButton bestButton = null;
+        float bestDistance = float.MaxValue;
+        foreach (SceneCommandButton button in sceneCommandButtons)
+        {
+            if (button == null)
+            {
+                continue;
+            }
+
+            bool available = IsSceneCommandAvailable(button.Command);
+            if (!IsSceneCommandVisible(button.Command, available))
+            {
+                continue;
+            }
+
+            if (!TryPointerSceneCommandDistance(button, mainCamera, out float distance))
+            {
+                continue;
+            }
+
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestButton = button;
+            }
+        }
+
+        if (bestButton != null)
+        {
+            lastSceneCommandPointerFrame = Time.frameCount;
+            ExecuteSceneCommand(bestButton.Command);
+        }
+    }
+
+    private bool TryPointerSceneCommandDistance(SceneCommandButton button, Camera mainCamera, out float distance)
+    {
+        distance = float.MaxValue;
+        Vector3 screenPosition = mainCamera.WorldToScreenPoint(button.transform.position);
+        if (screenPosition.z < 0f)
+        {
+            return false;
+        }
+
+        float pixelsPerWorldUnit = Screen.height / (mainCamera.orthographicSize * 2f);
+        float halfWidth = PlayableSceneRules.CommandButtonPlateSize.x * pixelsPerWorldUnit * 0.64f;
+        float halfHeight = PlayableSceneRules.CommandButtonPlateSize.y * pixelsPerWorldUnit * 0.48f;
+        Vector3 pointer = Input.mousePosition;
+        float deltaX = pointer.x - screenPosition.x;
+        float deltaY = pointer.y - screenPosition.y;
+        if (Mathf.Abs(deltaX) > halfWidth || Mathf.Abs(deltaY) > halfHeight)
+        {
+            return false;
+        }
+
+        distance = deltaX * deltaX + deltaY * deltaY;
+        return true;
+    }
+
     private void CreateHandViews(List<RuntimeCard> hand, PlayerSide side)
     {
+        bool mulliganPresentation = MatchStartRules.ShouldUseMulliganPresentation(phase, activeSide) && side == PlayerSide.Player;
         for (int i = 0; i < hand.Count; i++)
         {
-            bool hidden = side == PlayerSide.Enemy && activeSide != PlayerSide.Enemy;
-            CardView view = GetOrCreateCardView(hand[i], hidden);
-            Quaternion rotation = HandRotation(side, i, hand.Count);
+            bool hidden = side == PlayerSide.Enemy;
+            RuntimeCard runtimeCard = hand[i];
+            CardView view = GetOrCreateCardView(runtimeCard, hidden, true);
+            Quaternion rotation = mulliganPresentation ? Quaternion.identity : HandRotation(side, i, hand.Count);
+            bool centerInspect = centerInspectCard != null && centerInspectCard.Id == runtimeCard.Id;
+            Vector3 position = centerInspect
+                ? PlayableSceneRules.CenterInspectAnchor
+                : (mulliganPresentation ? MulliganHandPosition(i, hand.Count) : HandPosition(side, i, hand.Count));
+            float scale = centerInspect
+                ? PlayableSceneRules.CenterInspectScale
+                : (mulliganPresentation ? PlayableSceneRules.MulliganHandScale : PlayableSceneRules.HandCardScale);
+            bool compactHandPresentation = !centerInspect
+                && (mulliganPresentation || !(side == PlayerSide.Player && playerHandRevealed));
             view.SetLayout(
-                HandPosition(side, i, hand.Count),
-                new Vector3(PlayableSceneRules.HandCardScale, 1f, PlayableSceneRules.HandCardScale),
+                position,
+                new Vector3(scale, 1f, scale),
                 rotation,
-                true);
-            view.SetHandPresentation();
+                !centerInspect);
+            if (compactHandPresentation)
+            {
+                view.SetHandPresentation(mulliganPresentation);
+            }
+            else if (centerInspect)
+            {
+                view.SetDetailPresentation();
+            }
+            else if (side == PlayerSide.Player && playerHandRevealed && !centerInspect)
+            {
+                view.SetRevealedHandPresentation();
+            }
+
+            view.SetInteractionEnabled(!mulliganUsed || phase != GamePhase.Mulligan || side != PlayerSide.Player);
+            view.SetDragEnabled(!mulliganPresentation);
+            view.SetCenterInspectPresentation(centerInspect);
+            if (side == PlayerSide.Player)
+            {
+                view.SetMulliganMarked(MulliganRules.IsMarked(mulliganMarkedIds, runtimeCard));
+            }
+
+            if (ConsumePendingDrawAnimation(runtimeCard, out PlayerSide drawSide))
+            {
+                view.PlayDrawFlight(DeckWorldPosition(drawSide), position);
+            }
         }
+    }
+
+    private bool ConsumePendingDrawAnimation(RuntimeCard card, out PlayerSide side)
+    {
+        side = PlayerSide.Player;
+        if (card == null)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < pendingDrawAnimations.Count; i++)
+        {
+            if (pendingDrawAnimations[i].CardId == card.Id)
+            {
+                side = pendingDrawAnimations[i].Side;
+                pendingDrawAnimations.RemoveAt(i);
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private Quaternion HandRotation(PlayerSide side, int index, int count)
     {
         float baseRotation = side == PlayerSide.Enemy ? 180f : 0f;
-        float fanRotation = side == PlayerSide.Player ? CardLayoutRules.HandFanRotationDegrees(index, count) : 0f;
+        float fanRotation = 0f;
         return Quaternion.Euler(0f, baseRotation + fanRotation, 0f);
     }
 
@@ -3344,13 +4665,15 @@ public class GameController : MonoBehaviour
         for (int i = 0; i < state.Countermeasures.Count; i++)
         {
             bool hidden = state.Side == PlayerSide.Enemy;
-            CardView view = GetOrCreateCardView(state.Countermeasures[i], hidden);
+            CardView view = GetOrCreateCardView(state.Countermeasures[i], hidden, false);
             Quaternion rotation = state.Side == PlayerSide.Enemy ? Quaternion.Euler(0f, 180f, 0f) : Quaternion.identity;
             view.SetLayout(
                 CountermeasurePosition(state.Side, i, state.Countermeasures.Count, z),
                 new Vector3(PlayableSceneRules.CountermeasureCardScale, 1f, PlayableSceneRules.CountermeasureCardScale),
                 rotation,
                 true);
+            view.SetInteractionEnabled(true);
+            view.SetDragEnabled(false);
         }
     }
 
@@ -3361,7 +4684,9 @@ public class GameController : MonoBehaviour
             return sceneCardLayout.HandPosition(side, index, count, playerHandRevealed);
         }
 
-        float spacing = 0.78f;
+        float spacing = side == PlayerSide.Player && playerHandRevealed
+            ? PlayableSceneRules.RevealedHandSpacing
+            : PlayableSceneRules.HandSpacing;
         float z = side == PlayerSide.Player
             ? (playerHandRevealed ? PlayableSceneRules.PlayerHandRevealedAnchor.z : PlayableSceneRules.PlayerHandAnchor.z)
             : PlayableSceneRules.EnemyHandAnchor.z;
@@ -3370,7 +4695,10 @@ public class GameController : MonoBehaviour
             z += CardLayoutRules.HandFanDepthOffset(index, count);
         }
 
-        return new Vector3(CardLayoutRules.OffsetIndex(index, count) * spacing, 0.08f, z);
+        float y = side == PlayerSide.Player
+            ? 0.08f + CardLayoutRules.HandLayerHeightOffset(index)
+            : 0.08f;
+        return new Vector3(CardLayoutRules.OffsetIndex(index, count) * spacing, y, z);
     }
 
     private Vector3 CountermeasurePosition(PlayerSide side, int index, int count, float fallbackZ)
@@ -3393,18 +4721,34 @@ public class GameController : MonoBehaviour
                 continue;
             }
 
-            CardView view = GetOrCreateCardView(card, false);
-            Quaternion rotation = card.Owner == PlayerSide.Enemy ? Quaternion.Euler(0f, 180f, 0f) : Quaternion.identity;
-            view.SetLayout(pair.Value.transform.position + Vector3.up * 0.08f, Vector3.one, rotation, true);
+            if (player.Hand.Contains(card) || enemy.Hand.Contains(card))
+            {
+                continue;
+            }
+
+            CardView view = GetOrCreateCardView(card, false, false);
+            view.SetLayout(
+                pair.Value.transform.position + Vector3.up * PlayableSceneRules.BoardCardHeight,
+                new Vector3(PlayableSceneRules.BoardCardScale, 1f, PlayableSceneRules.BoardCardScale),
+                Quaternion.identity,
+                true);
+            view.SetInteractionEnabled(true);
+            view.SetDragEnabled(true);
+            view.RefreshKeywordIcons(pendingDeployDropCardId == card.Id);
         }
     }
 
     private CardView GetOrCreateCardView(RuntimeCard card, bool hidden)
     {
+        return GetOrCreateCardView(card, hidden, card != null && card.Zone == CardZone.Hand);
+    }
+
+    private CardView GetOrCreateCardView(RuntimeCard card, bool hidden, bool handPrefab)
+    {
         CardView existing = reusableCardViews != null
             ? reusableCardViews.Find(view => view != null && view.Card == card)
             : FindView(card);
-        if (existing != null && existing.IsHidden == hidden)
+        if (existing != null && existing.IsHidden == hidden && existing.UsesHandPrefab == handPrefab)
         {
             reusableCardViews?.Remove(existing);
             cardViews.Remove(existing);
@@ -3417,10 +4761,10 @@ public class GameController : MonoBehaviour
         {
             reusableCardViews?.Remove(existing);
             cardViews.Remove(existing);
-            Destroy(existing.gameObject);
+            RuntimeSafeDestroy.Destroy(existing.gameObject);
         }
 
-        return CreateCardView(card, hidden);
+        return CreateCardView(card, hidden, handPrefab);
     }
 
     private void DestroyUnusedCardViews(List<CardView> previousViews)
@@ -3429,18 +4773,197 @@ public class GameController : MonoBehaviour
         {
             if (view != null && !cardViews.Contains(view))
             {
-                Destroy(view.gameObject);
+                RuntimeSafeDestroy.Destroy(view.gameObject);
             }
         }
     }
 
     private CardView CreateCardView(RuntimeCard card, bool hidden)
     {
+        return CreateCardView(card, hidden, card != null && card.Zone == CardZone.Hand);
+    }
+
+    private CardView CreateCardView(RuntimeCard card, bool hidden, bool handPrefab)
+    {
         GameObject cardObject = new GameObject($"Card_{card.CardName}");
         CardView view = cardObject.AddComponent<CardView>();
-        view.Initialize(card, this, hidden);
+        view.Initialize(card, this, hidden, handPrefab);
         cardViews.Add(view);
         return view;
+    }
+
+    private CardView CreateTransientCardView(RuntimeCard card)
+    {
+        GameObject cardObject = new GameObject($"PlayedOrder_{card.CardName}");
+        CardView view = cardObject.AddComponent<CardView>();
+        view.Initialize(card, this, false);
+        transientCardViews.Add(view);
+        return view;
+    }
+
+    private void ResyncSelectionVisuals()
+    {
+        if (selectedCard == null)
+        {
+            return;
+        }
+
+        selectedView = FindView(selectedCard);
+        selectedView?.SetSelected(true);
+        HighlightLegalTargets(selectedCard, true);
+    }
+
+    private SlotInteract ResolvePointerSlot(Vector3 worldPosition, RuntimeCard attacker)
+    {
+        SlotInteract slot = board.GetSlot(worldPosition);
+        if (attacker == null || attacker.Zone != CardZone.Frontline || board == null)
+        {
+            return slot;
+        }
+
+        PlayerSide defenderSide = GetOpponentState(attacker.Owner).Side;
+        SlotInteract headquartersSlot = board.GetHeadquartersSlot(defenderSide);
+        if (headquartersSlot == null || !IsLegalAttackTarget(attacker, headquartersSlot))
+        {
+            return slot;
+        }
+
+        float headquartersDistance = Vector3.Distance(worldPosition, headquartersSlot.transform.position);
+        if (headquartersDistance > BoardTargetRules.HeadquartersTargetRadius)
+        {
+            return slot;
+        }
+
+        if (slot == null)
+        {
+            return headquartersSlot;
+        }
+
+        float slotDistance = Vector3.Distance(worldPosition, slot.transform.position);
+        return headquartersDistance + BoardTargetRules.HeadquartersTargetBias <= slotDistance
+            ? headquartersSlot
+            : slot;
+    }
+
+    private DamagePreview BuildAttackDamagePreview(RuntimeCard attacker, SlotInteract targetSlot)
+    {
+        if (attacker == null || targetSlot == null || !IsLegalAttackTarget(attacker, targetSlot))
+        {
+            return default;
+        }
+
+        if (targetSlot.IsOccupied)
+        {
+            CountermeasureResult countermeasurePrediction = PredictCountermeasureForAttack(attacker);
+            return DamagePreviewRules.ForUnitAttack(attacker, targetSlot.Occupant, countermeasurePrediction);
+        }
+
+        PlayerSide defenderSide = GetOpponentState(attacker.Owner).Side;
+        return DamagePreviewRules.ForHeadquartersAttack(attacker, GetState(defenderSide).HeadquartersHealth);
+    }
+
+    private DamagePreview BuildOrderDamagePreview(RuntimeCard order, SlotInteract targetSlot)
+    {
+        if (order == null || !player.CanSpendKredits(order.KreditCost))
+        {
+            return default;
+        }
+
+        if (order.EffectType == CardEffectType.DamageEnemyHeadquarters)
+        {
+            return DamagePreviewRules.ForOrder(order, null);
+        }
+
+        if (targetSlot == null || !IsLegalOrderTarget(order, targetSlot, PlayerSide.Player))
+        {
+            return default;
+        }
+
+        DamagePreview preview = DamagePreviewRules.ForOrder(order, targetSlot.Occupant);
+        if (order.EffectType == CardEffectType.DamageTargetUnitAndAdjacent)
+        {
+            AddOrderAdjacentDamagePreview(order, targetSlot, out int adjacentTargets, out int adjacentDamage);
+            preview.AdjacentTargets = adjacentTargets;
+            preview.AdjacentDamage = adjacentDamage;
+        }
+
+        return preview;
+    }
+
+    private CountermeasureResult PredictCountermeasureForAttack(RuntimeCard attacker)
+    {
+        if (attacker == null)
+        {
+            return new CountermeasureResult();
+        }
+
+        PlayerState defender = GetOpponentState(attacker.Owner);
+        if (defender == null || defender.Countermeasures.Count == 0)
+        {
+            return new CountermeasureResult();
+        }
+
+        return CountermeasureRules.Predict(defender.Countermeasures[0], attacker);
+    }
+
+    private void AddOrderAdjacentDamagePreview(RuntimeCard order, SlotInteract targetSlot, out int adjacentTargets, out int adjacentDamage)
+    {
+        adjacentTargets = 0;
+        adjacentDamage = 0;
+        if (order == null || targetSlot == null || board == null)
+        {
+            return;
+        }
+
+        AddAdjacentOrderDamagePreview(order, board.GetSlot(targetSlot.X - 1, targetSlot.Zone), ref adjacentTargets, ref adjacentDamage);
+        AddAdjacentOrderDamagePreview(order, board.GetSlot(targetSlot.X + 1, targetSlot.Zone), ref adjacentTargets, ref adjacentDamage);
+    }
+
+    private void AddAdjacentOrderDamagePreview(RuntimeCard order, SlotInteract slot, ref int adjacentTargets, ref int adjacentDamage)
+    {
+        if (order == null || slot == null || !slot.IsOccupied || slot.Occupant == null)
+        {
+            return;
+        }
+
+        adjacentTargets++;
+        adjacentDamage += ModifiedDamage(order.EffectAmount, slot.Occupant);
+    }
+
+    private Vector3 MulliganHandPosition(int index, int count)
+    {
+        float spacing = PlayableSceneRules.MulliganHandSpacing;
+        Vector3 anchor = PlayableSceneRules.MulliganHandAnchor;
+        return anchor
+            + Vector3.right * CardLayoutRules.OffsetIndex(index, count) * spacing
+            + Vector3.up * CardLayoutRules.HandLayerHeightOffset(index);
+    }
+
+    private Vector3 DeckWorldPosition(PlayerSide side)
+    {
+        float stackHeight = 0.12f + PlayableSceneRules.PileStackLayerCount * 0.006f;
+        return side == PlayerSide.Player
+            ? PlayableSceneRules.PlayerDeckPilePosition + Vector3.up * stackHeight
+            : PlayableSceneRules.EnemyDeckPilePosition + Vector3.up * stackHeight;
+    }
+
+    private Vector3 DiscardWorldPosition(PlayerSide side)
+    {
+        float stackHeight = 0.14f + PlayableSceneRules.PileStackLayerCount * 0.006f;
+        return side == PlayerSide.Player
+            ? PlayableSceneRules.PlayerDiscardPilePosition + Vector3.up * stackHeight
+            : PlayableSceneRules.EnemyDiscardPilePosition + Vector3.up * stackHeight;
+    }
+
+    private void EnsureSceneIconRegistry()
+    {
+        if (FindObjectOfType<SceneIconRegistry>() != null)
+        {
+            return;
+        }
+
+        GameObject registryObject = new GameObject("Scene Icon Registry");
+        registryObject.AddComponent<SceneIconRegistry>();
     }
 
     private void Shuffle(List<RuntimeCard> cards)

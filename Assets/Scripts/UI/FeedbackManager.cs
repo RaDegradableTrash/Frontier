@@ -42,7 +42,7 @@ public class FeedbackManager : MonoBehaviour
         pulse.name = $"CuePulse_{cueType}";
         pulse.transform.position = position + Vector3.up * 0.12f;
         pulse.transform.localScale = Vector3.one * SizeFor(cueType);
-        Destroy(pulse.GetComponent<Collider>());
+        RuntimeSafeDestroy.Destroy(pulse.GetComponent<Collider>());
 
         MeshRenderer renderer = pulse.GetComponent<MeshRenderer>();
         renderer.material = new Material(Shader.Find("Standard"));
@@ -86,7 +86,7 @@ public class FeedbackManager : MonoBehaviour
 
     private float SizeFor(FeedbackCueType cueType)
     {
-        return cueType == FeedbackCueType.Attack || cueType == FeedbackCueType.Damage ? 0.32f : 0.22f;
+        return cueType == FeedbackCueType.Attack || cueType == FeedbackCueType.Damage ? 0.24f : 0.16f;
     }
 
     private Color ColorFor(FeedbackCueType cueType)

@@ -16,22 +16,8 @@ public class SceneCardInspector : MonoBehaviour
     public void ShowCard(RuntimeCard card)
     {
         EnsureTextMesh();
-        if (!PlayableSceneRules.TabletopInfoPanelsEnabled)
-        {
-            textMesh.text = string.Empty;
-            SetRendererVisible(false);
-            return;
-        }
-
-        if (card == null)
-        {
-            textMesh.text = CardInspectorTextRules.EmptyHint();
-            SetRendererVisible(true);
-            return;
-        }
-
-        textMesh.text = CardInspectorTextRules.ForCard(card);
-        SetRendererVisible(true);
+        textMesh.text = string.Empty;
+        SetRendererVisible(false);
     }
 
     public void ApplyPresentation()
@@ -39,7 +25,7 @@ public class SceneCardInspector : MonoBehaviour
         EnsureTextMesh();
         textMesh.characterSize = PlayableSceneRules.InfoPanelCharacterSize;
         textMesh.color = color;
-        SetRendererVisible(PlayableSceneRules.TabletopInfoPanelsEnabled);
+        SetRendererVisible(false);
     }
 
     private void EnsureTextMesh()

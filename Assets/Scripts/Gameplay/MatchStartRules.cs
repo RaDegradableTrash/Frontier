@@ -17,10 +17,11 @@ public static class MatchStartRules
 
     public static bool ShouldInspectOnlyDuringOpeningHand(GamePhase phase, PlayerSide activeSide, RuntimeCard card)
     {
-        return phase == GamePhase.Mulligan
-            && activeSide == PlayerSide.Player
-            && card != null
-            && card.Owner == PlayerSide.Player
-            && card.Zone == CardZone.Hand;
+        return false;
+    }
+
+    public static bool ShouldUseMulliganPresentation(GamePhase phase, PlayerSide activeSide)
+    {
+        return phase == GamePhase.Mulligan && activeSide == PlayerSide.Player;
     }
 }

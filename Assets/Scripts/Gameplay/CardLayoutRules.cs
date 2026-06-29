@@ -7,13 +7,17 @@ public static class CardLayoutRules
 
     public static float HandFanRotationDegrees(int index, int count)
     {
-        return OffsetIndex(index, count) * -6.5f;
+        return 0f;
     }
 
     public static float HandFanDepthOffset(int index, int count)
     {
-        float offset = System.Math.Abs(OffsetIndex(index, count));
-        return -0.055f * offset;
+        return 0f;
+    }
+
+    public static float HandLayerHeightOffset(int index)
+    {
+        return index * 0.006f;
     }
 
     public static int NewlyAddedIndex(int countAfterAdd)

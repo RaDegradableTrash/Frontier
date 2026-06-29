@@ -75,6 +75,7 @@ public static class CardInspectorTextRules
         switch (effectType)
         {
             case CardEffectType.DamageTargetUnit:
+            case CardEffectType.DamageTargetUnitAndAdjacent:
                 return $"DAMAGE UNIT {effectAmount}";
             case CardEffectType.DamageEnemyHeadquarters:
                 return $"DAMAGE HQ {effectAmount}";
@@ -83,6 +84,7 @@ public static class CardInspectorTextRules
             case CardEffectType.DrawCards:
                 return $"DRAW {effectAmount}";
             case CardEffectType.BuffFriendlyUnit:
+            case CardEffectType.Trap:
                 return $"BUFF ALLY {effectAmount}";
             case CardEffectType.PinTargetUnit:
                 return "PIN ENEMY UNIT";

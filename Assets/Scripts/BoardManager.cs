@@ -4,7 +4,7 @@ using UnityEngine;
 public class BoardManager : MonoBehaviour
 {
     [SerializeField] private int frontlineColumns = 5;
-    [SerializeField] private int supportColumns = 4;
+    [SerializeField] private int supportColumns = 5;
     [SerializeField] private float slotWidth = 0.96f;
     [SerializeField] private float slotHeight = 1.26f;
     [SerializeField] private float slotPadding = 0.20f;
@@ -22,6 +22,10 @@ public class BoardManager : MonoBehaviour
     private SlotInteract enemyHeadquartersSlot;
     private TextMesh playerHeadquartersStrength;
     private TextMesh enemyHeadquartersStrength;
+    private TextMesh playerHeadquartersDamagePreview;
+    private TextMesh enemyHeadquartersDamagePreview;
+    private GameObject playerHeadquartersSkullPreview;
+    private GameObject enemyHeadquartersSkullPreview;
 
     public int FrontlineColumns => frontlineColumns;
     public int SupportColumns => supportColumns;
@@ -163,38 +167,37 @@ public class BoardManager : MonoBehaviour
 
     private void BuildGrid()
     {
+        supportColumns = 5;
         ClearExistingSlots();
         playerHeadquartersSlot = null;
         enemyHeadquartersSlot = null;
         playerHeadquartersStrength = null;
         enemyHeadquartersStrength = null;
+        playerHeadquartersDamagePreview = null;
+        enemyHeadquartersDamagePreview = null;
+        playerHeadquartersSkullPreview = null;
+        enemyHeadquartersSkullPreview = null;
         int columns = Mathf.Max(frontlineColumns, supportColumns);
         grid = new SlotInteract[columns, 3];
 
-        CreateRow(SlotZone.EnemySupport, supportColumns, 1.35f, PlayableSceneRules.EnemySlotColor);
+        CreateRow(SlotZone.EnemySupport, supportColumns, PlayableSceneRules.SupportRowZ, PlayableSceneRules.EnemySlotColor);
         CreateRow(SlotZone.Frontline, frontlineColumns, 0f, PlayableSceneRules.FrontlineSlotColor);
-        CreateRow(SlotZone.PlayerSupport, supportColumns, -1.35f, PlayableSceneRules.PlayerSlotColor);
-        CreateHeadquartersSlot(PlayerSide.Enemy);
-        CreateHeadquartersSlot(PlayerSide.Player);
+        CreateRow(SlotZone.PlayerSupport, supportColumns, -PlayableSceneRules.SupportRowZ, PlayableSceneRules.PlayerSlotColor);
+        ConfigureHeadquartersSlot(PlayerSide.Enemy);
+        ConfigureHeadquartersSlot(PlayerSide.Player);
         CreateCheckerboardCells();
     }
 
-    private void CreateHeadquartersSlot(PlayerSide side)
+    private void ConfigureHeadquartersSlot(PlayerSide side)
     {
-        Vector3 position = side == PlayerSide.Player ? PlayableSceneRules.PlayerHeadquartersSlot : PlayableSceneRules.EnemyHeadquartersSlot;
+        SlotZone zone = BoardTargetRules.HeadquartersTargetZone(side);
+        SlotInteract interact = GetSlot(BoardTargetRules.HeadquartersSlotIndex, zone);
+        if (interact == null)
+        {
+            return;
+        }
+
         Color tint = side == PlayerSide.Player ? PlayableSceneRules.PlayerSlotColor : PlayableSceneRules.EnemySlotColor;
-        GameObject slotObject = new GameObject($"{side}_Headquarters_Slot");
-        slotObject.transform.SetParent(transform, false);
-        slotObject.transform.localPosition = position;
-
-        BoxCollider collider = slotObject.AddComponent<BoxCollider>();
-        collider.size = new Vector3(0.96f, 0.08f, 1.26f);
-
-        SlotVisualize_Temp visual = slotObject.AddComponent<SlotVisualize_Temp>();
-        visual.Setup(CreateHeadquartersSlotCorners(), ResolveLineMaterial(), PlayableSceneRules.HeadquartersSlotColor);
-
-        SlotInteract interact = slotObject.AddComponent<SlotInteract>();
-        interact.Initialize(this, BoardTargetRules.HeadquartersSlotIndex, ZoneToRow(BoardTargetRules.HeadquartersTargetZone(side)), BoardTargetRules.HeadquartersTargetZone(side), visual);
         if (side == PlayerSide.Player)
         {
             playerHeadquartersSlot = interact;
@@ -205,18 +208,50 @@ public class BoardManager : MonoBehaviour
         }
 
         GameObject plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        plate.name = "HQ Plate";
-        plate.transform.SetParent(slotObject.transform, false);
+        plate.name = "HQ Card Body";
+        plate.transform.SetParent(interact.transform, false);
         plate.transform.localPosition = new Vector3(0f, 0.025f, 0f);
-        plate.transform.localScale = new Vector3(0.88f, 0.035f, 1.16f);
+        plate.transform.localScale = new Vector3(0.88f, 0.060f, 1.16f);
         DestroyGeneratedObject(plate.GetComponent<Collider>());
 
         MeshRenderer plateRenderer = plate.GetComponent<MeshRenderer>();
         AssignGeneratedMaterial(plateRenderer, Color.Lerp(tint, PlayableSceneRules.HeadquartersSlotColor, 0.35f));
 
-        CreateHeadquartersTextureLines(slotObject.transform, tint);
+        GameObject frame = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        frame.name = "HQ Card Frame";
+        frame.transform.SetParent(interact.transform, false);
+        frame.transform.localPosition = new Vector3(0f, 0.064f, 0f);
+        frame.transform.localScale = new Vector3(0.94f, 0.014f, 1.22f);
+        DestroyGeneratedObject(frame.GetComponent<Collider>());
+        AssignGeneratedMaterial(frame.GetComponent<MeshRenderer>(), new Color(0.92f, 0.88f, 0.72f, 1f));
+
+        GameObject face = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        face.name = "HQ Card Face";
+        face.transform.SetParent(interact.transform, false);
+        face.transform.localPosition = new Vector3(0f, 0.078f, 0f);
+        face.transform.localScale = new Vector3(0.78f, 0.012f, 1.02f);
+        DestroyGeneratedObject(face.GetComponent<Collider>());
+        AssignGeneratedMaterial(face.GetComponent<MeshRenderer>(), Color.Lerp(new Color(0.13f, 0.13f, 0.10f, 1f), tint, 0.35f));
+
+        GameObject titlePlate = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        titlePlate.name = "HQ Title Plate";
+        titlePlate.transform.SetParent(interact.transform, false);
+        titlePlate.transform.localPosition = new Vector3(0f, 0.092f, 0.39f);
+        titlePlate.transform.localScale = new Vector3(0.64f, 0.014f, 0.16f);
+        DestroyGeneratedObject(titlePlate.GetComponent<Collider>());
+        AssignGeneratedMaterial(titlePlate.GetComponent<MeshRenderer>(), new Color(0.08f, 0.075f, 0.055f, 1f));
+
+        GameObject healthBadge = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        healthBadge.name = "HQ Health Badge";
+        healthBadge.transform.SetParent(interact.transform, false);
+        healthBadge.transform.localPosition = new Vector3(0f, 0.094f, -0.08f);
+        healthBadge.transform.localScale = new Vector3(0.48f, 0.014f, 0.28f);
+        DestroyGeneratedObject(healthBadge.GetComponent<Collider>());
+        AssignGeneratedMaterial(healthBadge.GetComponent<MeshRenderer>(), new Color(0.045f, 0.047f, 0.040f, 1f));
+
+        CreateHeadquartersTextureLines(interact.transform, tint);
         TextMesh strengthText = CreateHeadquartersText(
-            slotObject.transform,
+            interact.transform,
             side == PlayerSide.Player ? "WASHINGTON" : "RANGOON",
             HeadquartersDisplayTextRules.Health(20));
         if (side == PlayerSide.Player)
@@ -227,18 +262,124 @@ public class BoardManager : MonoBehaviour
         {
             enemyHeadquartersStrength = strengthText;
         }
+
+        TextMesh previewText = CreateHeadquartersTextMesh(
+            interact.transform,
+            "HQ Damage Preview",
+            string.Empty,
+            new Vector3(0f, 0.126f, -0.08f),
+            0.105f,
+            TextAnchor.MiddleCenter);
+        previewText.color = new Color(1f, 0.24f, 0.14f, 1f);
+        Renderer previewRenderer = previewText.GetComponent<Renderer>();
+        if (previewRenderer != null)
+        {
+            previewRenderer.enabled = false;
+        }
+
+        GameObject skullPreview = CreateHeadquartersSkullPreview(interact.transform);
+        if (side == PlayerSide.Player)
+        {
+            playerHeadquartersDamagePreview = previewText;
+            playerHeadquartersSkullPreview = skullPreview;
+        }
+        else
+        {
+            enemyHeadquartersDamagePreview = previewText;
+            enemyHeadquartersSkullPreview = skullPreview;
+        }
     }
 
-    private Vector3[] CreateHeadquartersSlotCorners()
+    public void ShowHeadquartersDamagePreview(PlayerSide side, int damage, bool lethal)
     {
-        Vector3 halfSize = new Vector3(0.52f, 0.035f, 0.67f);
-        return new[]
+        TextMesh damagePreview = side == PlayerSide.Player ? playerHeadquartersDamagePreview : enemyHeadquartersDamagePreview;
+        GameObject skullPreview = side == PlayerSide.Player ? playerHeadquartersSkullPreview : enemyHeadquartersSkullPreview;
+        if (damagePreview == null || skullPreview == null)
         {
-            new Vector3(-halfSize.x, halfSize.y, halfSize.z),
-            new Vector3(halfSize.x, halfSize.y, halfSize.z),
-            new Vector3(halfSize.x, halfSize.y, -halfSize.z),
-            new Vector3(-halfSize.x, halfSize.y, -halfSize.z)
-        };
+            return;
+        }
+
+        if (lethal)
+        {
+            damagePreview.text = string.Empty;
+            Renderer damageRenderer = damagePreview.GetComponent<Renderer>();
+            if (damageRenderer != null)
+            {
+                damageRenderer.enabled = false;
+            }
+
+            skullPreview.SetActive(true);
+            return;
+        }
+
+        if (damage <= 0)
+        {
+            HideHeadquartersDamagePreview(side);
+            return;
+        }
+
+        skullPreview.SetActive(false);
+        damagePreview.text = damage.ToString();
+        Renderer renderer = damagePreview.GetComponent<Renderer>();
+        if (renderer != null)
+        {
+            renderer.enabled = true;
+        }
+    }
+
+    public void HideHeadquartersDamagePreviews()
+    {
+        HideHeadquartersDamagePreview(PlayerSide.Player);
+        HideHeadquartersDamagePreview(PlayerSide.Enemy);
+    }
+
+    private void HideHeadquartersDamagePreview(PlayerSide side)
+    {
+        TextMesh damagePreview = side == PlayerSide.Player ? playerHeadquartersDamagePreview : enemyHeadquartersDamagePreview;
+        GameObject skullPreview = side == PlayerSide.Player ? playerHeadquartersSkullPreview : enemyHeadquartersSkullPreview;
+        if (damagePreview != null)
+        {
+            damagePreview.text = string.Empty;
+            Renderer renderer = damagePreview.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.enabled = false;
+            }
+        }
+
+        if (skullPreview != null)
+        {
+            skullPreview.SetActive(false);
+        }
+    }
+
+    private GameObject CreateHeadquartersSkullPreview(Transform parent)
+    {
+        GameObject skull = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        skull.name = "HQ Death Preview";
+        skull.transform.SetParent(parent, false);
+        skull.transform.localPosition = new Vector3(0f, 0.128f, -0.08f);
+        skull.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+        skull.transform.localScale = new Vector3(0.24f, 0.24f, 1f);
+        DestroyGeneratedObject(skull.GetComponent<Collider>());
+
+        MeshRenderer renderer = skull.GetComponent<MeshRenderer>();
+        if (renderer != null)
+        {
+            Material material = new Material(Shader.Find("Standard"));
+            Texture2D skullTexture = SceneIconRegistry.Active != null
+                ? SceneIconRegistry.Active.EstimatedDeathSkullIcon
+                : Resources.Load<Texture2D>("Icons/EstimatedDeathSkull");
+            if (skullTexture != null)
+            {
+                material.mainTexture = skullTexture;
+            }
+
+            renderer.material = material;
+        }
+
+        skull.SetActive(false);
+        return skull;
     }
 
     private TextMesh CreateHeadquartersText(Transform parent, string name, string strength)
@@ -340,9 +481,9 @@ public class BoardManager : MonoBehaviour
     {
         Color dark = new Color(0.12f, 0.105f, 0.075f, 1f);
         Color light = new Color(0.17f, 0.145f, 0.095f, 1f);
-        CreateCheckerboardRow(SlotZone.EnemySupport, supportColumns, 1.35f, dark, light);
+        CreateCheckerboardRow(SlotZone.EnemySupport, supportColumns, PlayableSceneRules.SupportRowZ, dark, light);
         CreateCheckerboardRow(SlotZone.Frontline, frontlineColumns, 0f, light, dark);
-        CreateCheckerboardRow(SlotZone.PlayerSupport, supportColumns, -1.35f, dark, light);
+        CreateCheckerboardRow(SlotZone.PlayerSupport, supportColumns, -PlayableSceneRules.SupportRowZ, dark, light);
     }
 
     private void CreateCheckerboardRow(SlotZone zone, int count, float zOffset, Color firstColor, Color secondColor)
@@ -379,9 +520,9 @@ public class BoardManager : MonoBehaviour
 
     private void CreateBoardLabels()
     {
-        CreateLaneLabel("ENEMY SUPPORT", new Vector3(-3.1f, 0.04f, 1.35f), new Color(1f, 0.55f, 0.55f));
+        CreateLaneLabel("ENEMY SUPPORT", new Vector3(-3.1f, 0.04f, PlayableSceneRules.SupportRowZ), new Color(1f, 0.55f, 0.55f));
         CreateLaneLabel("FRONTLINE", new Vector3(-3.1f, 0.04f, 0f), new Color(1f, 0.9f, 0.25f));
-        CreateLaneLabel("YOUR SUPPORT", new Vector3(-3.1f, 0.04f, -1.35f), new Color(0.55f, 0.78f, 1f));
+        CreateLaneLabel("YOUR SUPPORT", new Vector3(-3.1f, 0.04f, -PlayableSceneRules.SupportRowZ), new Color(0.55f, 0.78f, 1f));
     }
 
     private void CreateLaneLabel(string text, Vector3 localPosition, Color color)

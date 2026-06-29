@@ -22,17 +22,8 @@ public class SceneActionPrompt : MonoBehaviour
     public void UpdatePrompt(GamePhase phase, PlayerSide activeSide, bool mulliganUsed)
     {
         EnsureTextMesh();
-        if (!PlayableSceneRules.TabletopActionPromptEnabled)
-        {
-            textMesh.text = string.Empty;
-            SetRendererVisible(false);
-            return;
-        }
-
-        textMesh.text = phase == GamePhase.Mulligan
-            ? (mulliganUsed ? "KEEP HAND" : SceneGuidanceRules.TablePrompt(phase, activeSide))
-            : SceneGuidanceRules.TablePrompt(phase, activeSide);
-        SetRendererVisible(true);
+        textMesh.text = string.Empty;
+        SetRendererVisible(false);
     }
 
     public void ApplyPresentation()
@@ -43,18 +34,8 @@ public class SceneActionPrompt : MonoBehaviour
         textMesh.characterSize = PlayableSceneRules.ActionPromptCharacterSize;
         textMesh.color = color;
         ApplyUnlitTextMaterial();
-        if (!PlayableSceneRules.TabletopActionPromptEnabled)
-        {
-            textMesh.text = string.Empty;
-            SetRendererVisible(false);
-            return;
-        }
-
-        if (string.IsNullOrEmpty(textMesh.text))
-        {
-            textMesh.text = SceneGuidanceRules.TablePrompt(GamePhase.PlayerTurn, PlayerSide.Player);
-        }
-        SetRendererVisible(true);
+        textMesh.text = string.Empty;
+        SetRendererVisible(false);
     }
 
     private void EnsureTextMesh()

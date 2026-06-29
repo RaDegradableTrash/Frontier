@@ -5,7 +5,6 @@ public class SceneStatusDisplay : MonoBehaviour
 {
     [SerializeField] private Color color = Color.white;
     [SerializeField] private float characterSize = PlayableSceneRules.InfoPanelCharacterSize;
-    [SerializeField] private int maxLogLines = PlayableSceneRules.StatusMaxLogLines;
 
     private TextMesh textMesh;
 
@@ -24,15 +23,8 @@ public class SceneStatusDisplay : MonoBehaviour
         IList<string> actionLog)
     {
         EnsureTextMesh();
-        if (!PlayableSceneRules.TabletopInfoPanelsEnabled)
-        {
-            textMesh.text = string.Empty;
-            SetRendererVisible(false);
-            return;
-        }
-
-        textMesh.text = StatusSnapshotTextRules.Build(player, enemy, phase, activeSide, frontline, status, actionLog, maxLogLines);
-        SetRendererVisible(true);
+        textMesh.text = string.Empty;
+        SetRendererVisible(false);
     }
 
     public void ApplyPresentation()
@@ -40,7 +32,7 @@ public class SceneStatusDisplay : MonoBehaviour
         EnsureTextMesh();
         textMesh.characterSize = PlayableSceneRules.InfoPanelCharacterSize;
         textMesh.color = color;
-        SetRendererVisible(PlayableSceneRules.TabletopInfoPanelsEnabled);
+        SetRendererVisible(false);
     }
 
     private void EnsureTextMesh()

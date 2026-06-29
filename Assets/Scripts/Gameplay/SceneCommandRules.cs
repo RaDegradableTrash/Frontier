@@ -9,7 +9,9 @@ public static class SceneCommandRules
         bool hasValidDeck,
         bool mulliganUsed)
     {
-        if (isResolvingEvents && command != SceneCommandType.Restart)
+        if (isResolvingEvents
+            && command != SceneCommandType.Restart
+            && command != SceneCommandType.EndTurn)
         {
             return false;
         }

@@ -1,6 +1,5 @@
 using UnityEngine;
 
-[ExecuteAlways]
 public class PlayableScenePresenter : MonoBehaviour
 {
     private static readonly int ColorProperty = Shader.PropertyToID("_Color");
@@ -24,45 +23,83 @@ public class PlayableScenePresenter : MonoBehaviour
     private Material cachedHandRailMaterial;
     private Material cachedInfoPanelMaterial;
     private Material cachedActionPromptMaterial;
-    private float nextRuntimeApplyTime;
+    private bool runtimePresentationEnabled;
 
-    private void Awake()
-    {
-        Apply();
-    }
-
-    private void OnEnable()
-    {
-        Apply();
-    }
-
-    private void OnValidate()
-    {
-        Apply();
-    }
-
-    private void Start()
-    {
-        Apply();
-    }
-
-    private void Update()
-    {
-        if (!Application.isPlaying)
+private static bool CanMutateSceneHierarchy
         {
-            Apply();
-            return;
+            get
+            {
+#if UNITY_EDITOR
+            if (UnityEditor.EditorApplication.isCompiling || UnityEditor.EditorApplication.isUpdating)
+            {
+                return false;
+            }
+
+            if (!Application.isPlaying)
+            {
+                return false;
+            }
+
+            if (UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                return false;
+            }
+
+            if (Time.frameCount < 2)
+            {
+                return false;
+            }
+
+            return !EditorConsistencyCallbackInProgress();
+#else
+            return Application.isPlaying;
+#endif
+        }
+    }
+
+#if UNITY_EDITOR
+    private static bool EditorConsistencyCallbackInProgress()
+    {
+        var stack = new System.Diagnostics.StackTrace();
+        for (int i = 1; i < stack.FrameCount; i++)
+        {
+            var method = stack.GetFrame(i)?.GetMethod();
+            var name = method?.Name ?? string.Empty;
+            if (name.Contains("OnValidate") || name.Contains("CheckConsistency") || name.Contains("OnBeforeTransformParentChanged") || name.Contains("OnTransformParentChanged") || name.Contains("OnTransformChildrenChanged"))
+            {
+                return true;
+            }
         }
 
-        if (Time.unscaledTime >= nextRuntimeApplyTime)
-        {
-            nextRuntimeApplyTime = Time.unscaledTime + PlayableSceneRules.RuntimePresenterRefreshSeconds;
-            Apply();
-        }
+        return false;
+    }
+#endif
+
+    public void EnableRuntimePresentation()
+    {
+        runtimePresentationEnabled = true;
+        Apply();
     }
 
     public void Apply()
     {
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
+        if (!runtimePresentationEnabled || !CanMutateSceneHierarchy)
+        {
+            return;
+        }
+
+#if UNITY_EDITOR
+        if (EditorConsistencyCallbackInProgress() || UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode)
+        {
+            return;
+        }
+#endif
+
         ConfigureCamera();
         ConfigureTabletop();
         ConfigureTableBorder();
@@ -213,6 +250,16 @@ public class PlayableScenePresenter : MonoBehaviour
     private void ConfigureHandHint()
     {
         GameObject hint = GameObject.Find(HandHintName);
+        if (!PlayableSceneRules.HandHintLabelEnabled)
+        {
+            if (hint != null)
+            {
+                hint.SetActive(false);
+            }
+
+            return;
+        }
+
         if (hint == null)
         {
             hint = new GameObject(HandHintName);
@@ -223,6 +270,7 @@ public class PlayableScenePresenter : MonoBehaviour
             textMesh.fontSize = 72;
         }
 
+        hint.SetActive(true);
         hint.transform.position = PlayableSceneRules.HandHintPosition;
         TextMesh label = hint.GetComponent<TextMesh>();
         if (label != null)
@@ -442,6 +490,40 @@ public class PlayableScenePresenter : MonoBehaviour
 
         backing.transform.position = pile.transform.position;
         Vector2 scale = PlayableSceneRules.PileBadgeScale;
+        if (PlayableSceneRules.PileStackLayerCount <= 0)
+        {
+            for (int i = backing.transform.childCount - 1; i >= 0; i--)
+            {
+                DestroyGeneratedObject(backing.transform.GetChild(i).gameObject);
+            }
+
+            Vector3 baseScale = new Vector3(scale.x, 0.026f, scale.y);
+            MeshRenderer existingRenderer = backing.GetComponent<MeshRenderer>();
+            if (existingRenderer == null)
+            {
+                GameObject baseLayer = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                baseLayer.name = "LayerFlat";
+                baseLayer.transform.SetParent(backing.transform, false);
+                baseLayer.transform.localPosition = new Vector3(0f, -0.108f, 0f);
+                baseLayer.transform.localScale = baseScale;
+                Collider collider = baseLayer.GetComponent<Collider>();
+                if (collider != null)
+                {
+                    DestroyGeneratedObject(collider);
+                }
+
+                existingRenderer = baseLayer.GetComponent<MeshRenderer>();
+            }
+
+            if (existingRenderer != null)
+            {
+                Color color = Color.Lerp(new Color(0.05f, 0.055f, 0.05f), new Color(0.09f, 0.095f, 0.085f), 0.45f);
+                existingRenderer.sharedMaterial = NewSurfaceMaterial(color);
+            }
+
+            return;
+        }
+
         for (int i = 0; i < PlayableSceneRules.PileStackLayerCount; i++)
         {
             Transform layer = backing.transform.Find($"Layer {i}");
@@ -468,6 +550,50 @@ public class PlayableScenePresenter : MonoBehaviour
             {
                 Color color = Color.Lerp(new Color(0.035f, 0.04f, 0.035f), new Color(0.075f, 0.08f, 0.07f), i / 3f);
                 renderer.sharedMaterial = NewSurfaceMaterial(color);
+            }
+        }
+
+        ConfigurePileTopPattern(backing.transform, pile.Kind, scale);
+    }
+
+    private void ConfigurePileTopPattern(Transform backing, ScenePileKind kind, Vector2 scale)
+    {
+        if (backing == null || PlayableSceneRules.PileStackLayerCount <= 0)
+        {
+            return;
+        }
+
+        float topOffset = (PlayableSceneRules.PileStackLayerCount - 1) * PlayableSceneRules.PileStackLayerOffset;
+        float topY = -0.108f - (PlayableSceneRules.PileStackLayerCount - 1) * 0.002f + 0.018f;
+        string prefix = kind == ScenePileKind.Deck ? "Deck Back" : "Discard Top";
+        Color stripeColor = kind == ScenePileKind.Deck
+            ? new Color(0.68f, 0.62f, 0.48f, 1f)
+            : new Color(0.38f, 0.40f, 0.36f, 1f);
+
+        for (int i = 0; i < 3; i++)
+        {
+            string stripeName = $"{prefix} Stripe {i}";
+            Transform stripe = backing.Find(stripeName);
+            if (stripe == null)
+            {
+                GameObject stripeObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                stripeObject.name = stripeName;
+                stripeObject.transform.SetParent(backing, false);
+                Collider collider = stripeObject.GetComponent<Collider>();
+                if (collider != null)
+                {
+                    DestroyGeneratedObject(collider);
+                }
+
+                stripe = stripeObject.transform;
+            }
+
+            stripe.localPosition = new Vector3(-topOffset, topY + i * 0.003f, topOffset - 0.18f + i * 0.18f);
+            stripe.localScale = new Vector3(scale.x * 0.62f, 0.006f, 0.018f);
+            MeshRenderer stripeRenderer = stripe.GetComponent<MeshRenderer>();
+            if (stripeRenderer != null)
+            {
+                stripeRenderer.sharedMaterial = NewSurfaceMaterial(stripeColor);
             }
         }
     }
@@ -653,19 +779,24 @@ public class PlayableScenePresenter : MonoBehaviour
 
     private void DestroyGeneratedObject(Object generatedObject)
     {
+        if (generatedObject == null)
+        {
+            return;
+        }
+
+        // Any non-runtime cleanup in edit mode can run during scene serialization/
+        // restore paths and must never call Destroy while not playing.
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
         if (generatedObject is Collider collider)
         {
             collider.enabled = false;
             return;
         }
 
-        if (Application.isPlaying)
-        {
-            Destroy(generatedObject);
-        }
-        else
-        {
-            DestroyImmediate(generatedObject);
-        }
+        RuntimeSafeDestroy.Destroy(generatedObject);
     }
 }

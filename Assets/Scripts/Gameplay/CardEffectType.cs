@@ -3,9 +3,17 @@ public enum CardEffectType
     None,
     DamageEnemyHeadquarters,
     DamageTargetUnit,
+    DamageTargetUnitAndAdjacent,
     RepairHeadquarters,
     DrawCards,
     BuffFriendlyUnit,
     PinTargetUnit,
-    CancelAttack
+    CancelAttack,
+    AddUnitToHand,
+    DeployWithBlitz,
+    IncreaseEnemyCosts,
+    GrantFriendlyDefense,
+    DrawForCardsPlayed,
+    Trap,
+    FieldIntel
 }
