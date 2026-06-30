@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEngine;
 
 [RequireComponent(typeof(BoxCollider))]
@@ -8,16 +9,16 @@ public class CardView : MonoBehaviour
 
     private RuntimeCard card;
     private GameController controller;
-    private TextMesh label;
-    private TextMesh costLabel;
-    private TextMesh attackLabel;
-    private TextMesh defenseLabel;
-    private TextMesh costBadgeLabel;
-    private TextMesh attackBadgeLabel;
-    private TextMesh defenseBadgeLabel;
-    private TextMesh operationLabel;
-    private TextMesh statusLabel;
-    private TextMesh selectionLabel;
+    private TMP_Text label;
+    private TMP_Text costLabel;
+    private TMP_Text attackLabel;
+    private TMP_Text defenseLabel;
+    private TMP_Text costBadgeLabel;
+    private TMP_Text attackBadgeLabel;
+    private TMP_Text defenseBadgeLabel;
+    private TMP_Text operationLabel;
+    private TMP_Text statusLabel;
+    private TMP_Text selectionLabel;
     private MeshRenderer faceRenderer;
     private MeshRenderer rarityBandRenderer;
     private MeshRenderer selectionRenderer;
@@ -42,7 +43,7 @@ public class CardView : MonoBehaviour
     private MeshRenderer discardOverlayRenderer;
     private CardPrefabTemplate prefabTemplate;
     private bool useHandPrefab;
-    private TextMesh damagePreviewLabel;
+    private TMP_Text damagePreviewLabel;
     private GameObject damagePreviewSkullObject;
     private MeshRenderer damagePreviewSkullRenderer;
     private readonly System.Collections.Generic.List<GameObject> keywordIconObjects = new System.Collections.Generic.List<GameObject>();
@@ -128,7 +129,7 @@ public class CardView : MonoBehaviour
         }
     }
 
-    private void SetTextVisible(TextMesh textMesh, bool visible)
+    private void SetTextVisible(TMP_Text textMesh, bool visible)
     {
         if (textMesh == null)
         {
@@ -197,7 +198,7 @@ public class CardView : MonoBehaviour
             : EffectLabel(card.EffectType);
         string keywordLine = KeywordLine(card);
         string rules = WrapText(card.RulesText, maxCharsPerLine, maxRulesLines);
-        string text = card.CardName;
+        string text = CardTextRules.DisplayCardName(card);
         if (!string.IsNullOrEmpty(typeLine))
         {
             text = $"{text}\n{typeLine}";
@@ -209,6 +210,47 @@ public class CardView : MonoBehaviour
         }
 
         return string.IsNullOrEmpty(rules) ? text : $"{text}\n{rules}";
+    }
+
+    private string BuildHandRulesText()
+    {
+        if (card == null)
+        {
+            return string.Empty;
+        }
+
+        string keywordLine = KeywordLine(card);
+        string effectLine = EffectLabel(card.EffectType);
+        if (card.EffectAmount > 0 && !string.IsNullOrEmpty(effectLine))
+        {
+            effectLine = $"{effectLine} {card.EffectAmount}";
+        }
+
+        string rulesLine = WrapText(card.RulesText, 12, 2);
+        if (card.Type == CardType.Unit)
+        {
+            if (!string.IsNullOrEmpty(keywordLine) && !string.IsNullOrEmpty(effectLine))
+            {
+                return $"{keywordLine}\n{effectLine}";
+            }
+
+            if (!string.IsNullOrEmpty(keywordLine))
+            {
+                return keywordLine;
+            }
+
+            if (!string.IsNullOrEmpty(effectLine))
+            {
+                return effectLine;
+            }
+        }
+
+        if (!string.IsNullOrEmpty(effectLine))
+        {
+            return string.IsNullOrEmpty(rulesLine) ? effectLine : $"{effectLine}\n{rulesLine}";
+        }
+
+        return rulesLine;
     }
 
     private string StatusText()
@@ -325,7 +367,7 @@ public class CardView : MonoBehaviour
 
     public void SetSelected(bool selected)
     {
-        if (faceRenderer != null)
+        if (faceRenderer != null && prefabTemplate == null)
         {
             faceRenderer.material.color = normalColor;
         }
@@ -361,16 +403,12 @@ public class CardView : MonoBehaviour
         if (label != null)
         {
             label.text = $"{TypeLabel(card.Type)} {CardTextRules.ShortCardName(card)}";
-            label.anchor = TextAnchor.MiddleCenter;
-            label.alignment = TextAlignment.Center;
-            label.characterSize = prominent ? 0.030f : 0.016f;
-            label.transform.localPosition = new Vector3(0f, 0.098f, prominent ? -CardHeight * 0.04f : -CardHeight * 0.06f);
-            label.color = new Color(0.02f, 0.018f, 0.012f);
         }
 
         if (costLabel != null)
         {
-            costLabel.characterSize = prominent ? 0.082f : 0.038f;
+            costLabel.text = $"{card.KreditCost}";
+            SetTextVisible(costLabel, true);
         }
 
         if (costBadgeLabel != null)
@@ -393,26 +431,26 @@ public class CardView : MonoBehaviour
 
         if (attackLabel != null)
         {
-            attackLabel.text = string.Empty;
-            SetTextVisible(attackLabel, false);
+            attackLabel.text = card.Type == CardType.Unit ? $"{card.Attack}" : string.Empty;
+            SetTextVisible(attackLabel, card.Type == CardType.Unit);
         }
 
         if (defenseLabel != null)
         {
-            defenseLabel.text = string.Empty;
-            SetTextVisible(defenseLabel, false);
+            defenseLabel.text = card.Type == CardType.Unit ? $"{card.CurrentDefense}" : string.Empty;
+            SetTextVisible(defenseLabel, card.Type == CardType.Unit);
         }
 
         if (statusLabel != null)
         {
-            statusLabel.text = string.Empty;
-            SetTextVisible(statusLabel, false);
+            statusLabel.text = BuildHandRulesText();
+            SetTextVisible(statusLabel, !string.IsNullOrEmpty(statusLabel.text));
         }
 
         if (operationLabel != null)
         {
-            operationLabel.text = string.Empty;
-            SetTextVisible(operationLabel, false);
+            operationLabel.text = card.Type == CardType.Unit ? $"{card.OperationCost}" : string.Empty;
+            SetTextVisible(operationLabel, card.Type == CardType.Unit);
         }
 
         if (operationBadgeRenderer != null)
@@ -431,34 +469,36 @@ public class CardView : MonoBehaviour
         if (label != null)
         {
             label.text = $"{TypeLabel(card.Type)} {CardTextRules.ShortCardName(card)}";
-            label.anchor = TextAnchor.MiddleCenter;
-            label.alignment = TextAlignment.Center;
-            label.characterSize = 0.017f;
-            label.transform.localPosition = new Vector3(0f, 0.098f, -CardHeight * 0.06f);
-            label.color = new Color(0.015f, 0.013f, 0.009f);
         }
 
         if (costLabel != null)
         {
-            costLabel.characterSize = 0.038f;
+            costLabel.text = $"{card.KreditCost}";
+            SetTextVisible(costLabel, true);
         }
 
         if (operationLabel != null)
         {
-            operationLabel.text = string.Empty;
-            SetTextVisible(operationLabel, false);
+            operationLabel.text = card.Type == CardType.Unit ? $"{card.OperationCost}" : string.Empty;
+            SetTextVisible(operationLabel, card.Type == CardType.Unit);
         }
 
         if (attackLabel != null)
         {
-            attackLabel.text = string.Empty;
-            SetTextVisible(attackLabel, false);
+            attackLabel.text = card.Type == CardType.Unit ? $"{card.Attack}" : string.Empty;
+            SetTextVisible(attackLabel, card.Type == CardType.Unit);
         }
 
         if (defenseLabel != null)
         {
-            defenseLabel.text = string.Empty;
-            SetTextVisible(defenseLabel, false);
+            defenseLabel.text = card.Type == CardType.Unit ? $"{card.CurrentDefense}" : string.Empty;
+            SetTextVisible(defenseLabel, card.Type == CardType.Unit);
+        }
+
+        if (statusLabel != null)
+        {
+            statusLabel.text = BuildHandRulesText();
+            SetTextVisible(statusLabel, !string.IsNullOrEmpty(statusLabel.text));
         }
     }
 
@@ -472,58 +512,36 @@ public class CardView : MonoBehaviour
         if (label != null)
         {
             label.text = BuildKardsDetailText(18, 2);
-            label.anchor = TextAnchor.MiddleCenter;
-            label.alignment = TextAlignment.Center;
-            label.characterSize = 0.019f;
-            label.transform.localPosition = new Vector3(0f, 0.104f, -CardHeight * 0.30f);
-            label.color = new Color(0.035f, 0.025f, 0.015f);
             SetTextVisible(label, true);
         }
 
         if (costLabel != null)
         {
             costLabel.text = $"{card.KreditCost}";
-            costLabel.characterSize = 0.108f;
             SetTextVisible(costLabel, true);
         }
 
         if (operationLabel != null)
         {
             operationLabel.text = card.Type == CardType.Unit ? $"{card.OperationCost}" : string.Empty;
-            operationLabel.characterSize = 0.080f;
             SetTextVisible(operationLabel, card.Type == CardType.Unit);
         }
 
         if (attackLabel != null)
         {
             attackLabel.text = card.Type == CardType.Unit ? $"{card.Attack}" : string.Empty;
-            attackLabel.characterSize = 0.102f;
             SetTextVisible(attackLabel, card.Type == CardType.Unit);
         }
 
         if (defenseLabel != null)
         {
             defenseLabel.text = card.Type == CardType.Unit ? $"{card.CurrentDefense}" : string.Empty;
-            defenseLabel.characterSize = 0.102f;
             SetTextVisible(defenseLabel, card.Type == CardType.Unit);
         }
     }
 
     private void ApplyDefaultPresentation()
     {
-        if (label != null)
-        {
-            label.anchor = TextAnchor.UpperLeft;
-            label.alignment = TextAlignment.Left;
-            label.characterSize = PlayableSceneRules.CardTextCharacterSize;
-            label.transform.localPosition = new Vector3(-CardWidth * 0.32f, 0.088f, -CardHeight * 0.16f);
-            label.color = isHidden ? Color.white : new Color(0.02f, 0.025f, 0.03f);
-        }
-
-        if (costLabel != null)
-        {
-            costLabel.characterSize = PlayableSceneRules.CardNumberCharacterSize;
-        }
     }
 
     public void SetLayout(Vector3 position, Vector3 scale, Quaternion rotation, bool animate)
@@ -881,6 +899,7 @@ public class CardView : MonoBehaviour
         else if (CardInteractionRules.ShouldReleasePlayerHandHold(isDragging) && !isSelected)
         {
             HoldPlayerHandOpen(false);
+            controller?.HandleCardHoverEnded(this);
         }
     }
 
@@ -1056,18 +1075,14 @@ public class CardView : MonoBehaviour
         rarityBand.transform.localScale = new Vector3(CardWidth * 0.92f, 0.012f, 0.055f);
         RuntimeSafeDestroy.Destroy(rarityBand.GetComponent<Collider>());
         rarityBandRenderer = rarityBand.GetComponent<MeshRenderer>();
-        rarityBandRenderer.material = new Material(Shader.Find("Standard"));
-        rarityBandRenderer.material.color = hidden ? new Color(0.35f, 0.38f, 0.46f) : RarityColor(card.Rarity);
+        rarityBandRenderer.material = CreateRuntimeColorMaterial(hidden ? new Color(0.35f, 0.38f, 0.46f) : RarityColor(card.Rarity));
 
         GameObject text = new GameObject("Label");
         text.transform.SetParent(transform, false);
         text.transform.localPosition = new Vector3(-CardWidth * 0.40f, 0.084f, CardHeight * 0.28f);
         text.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        label = text.AddComponent<TextMesh>();
-        label.anchor = TextAnchor.UpperLeft;
-        label.alignment = TextAlignment.Left;
-        label.characterSize = 0.030f;
-        label.fontSize = 192;
+        label = text.AddComponent<TextMeshPro>();
+        ConfigureTmpText(label, 0.030f, TextAnchor.UpperLeft);
         label.color = hidden ? Color.white : new Color(0.04f, 0.035f, 0.025f);
         costLabel = CreateCardText("Cost Number", new Vector3(-CardWidth * 0.39f, 0.094f, CardHeight * 0.43f), 0.105f, TextAnchor.MiddleCenter, new Color(1f, 0.88f, 0.42f));
         operationLabel = CreateCardText("Operation Number", new Vector3(CardWidth * 0.39f, 0.095f, CardHeight * 0.43f), 0.080f, TextAnchor.MiddleCenter, new Color(1f, 0.88f, 0.38f));
@@ -1105,6 +1120,8 @@ public class CardView : MonoBehaviour
         prefabTemplate.transform.localPosition = Vector3.zero;
         prefabTemplate.transform.localRotation = Quaternion.identity;
         prefabTemplate.transform.localScale = Vector3.one;
+        SanitizePrefabMaterials(prefabTemplate);
+        ApplyPrefabTextFont(prefabTemplate);
 
         faceRenderer = prefabTemplate.faceRenderer;
         rarityBandRenderer = prefabTemplate.rarityBandRenderer;
@@ -1125,13 +1142,13 @@ public class CardView : MonoBehaviour
         selectionLabel = prefabTemplate.selectionLabel;
 
         normalColor = hidden ? new Color(0.15f, 0.18f, 0.25f) : FactionColor(card.Faction);
-        if (faceRenderer != null)
+        if (faceRenderer != null && hidden)
         {
             faceRenderer.material = ResolveFaceMaterial(hidden);
             faceRenderer.material.color = normalColor;
         }
 
-        if (rarityBandRenderer != null)
+        if (rarityBandRenderer != null && hidden)
         {
             rarityBandRenderer.material.color = hidden ? new Color(0.35f, 0.38f, 0.46f) : RarityColor(card.Rarity);
         }
@@ -1166,6 +1183,83 @@ public class CardView : MonoBehaviour
         return true;
     }
 
+    private void SanitizePrefabMaterials(CardPrefabTemplate template)
+    {
+        if (template == null)
+        {
+            return;
+        }
+
+        MeshRenderer[] renderers = template.GetComponentsInChildren<MeshRenderer>(true);
+        foreach (MeshRenderer renderer in renderers)
+        {
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            if (renderer.GetComponent<TMP_Text>() != null)
+            {
+                continue;
+            }
+
+            Color color = renderer.sharedMaterial != null && renderer.sharedMaterial.HasProperty("_Color")
+                ? renderer.sharedMaterial.color
+                : Color.white;
+            renderer.material = CreateRuntimeColorMaterial(color);
+        }
+    }
+
+    private void ApplyPrefabTextFont(CardPrefabTemplate template)
+    {
+        if (template == null)
+        {
+            return;
+        }
+
+        TMP_Text[] texts = template.GetComponentsInChildren<TMP_Text>(true);
+        foreach (TMP_Text text in texts)
+        {
+            CardTmpFont.Apply(text);
+        }
+    }
+
+    private Material CreateRuntimeColorMaterial(Color color)
+    {
+        Shader shader = Shader.Find("Unlit/Color");
+        if (shader == null)
+        {
+            shader = Shader.Find("Sprites/Default");
+        }
+
+        if (shader == null)
+        {
+            shader = Shader.Find("Standard");
+        }
+
+        Material material = new Material(shader);
+        material.color = color;
+        return material;
+    }
+
+    private Material CreateRuntimeTextureMaterial(Color color)
+    {
+        Shader shader = Shader.Find("Sprites/Default");
+        if (shader == null)
+        {
+            shader = Shader.Find("Unlit/Texture");
+        }
+
+        if (shader == null)
+        {
+            shader = Shader.Find("Standard");
+        }
+
+        Material material = new Material(shader);
+        material.color = color;
+        return material;
+    }
+
     private string CardPrefabResourcePath()
     {
         if (card != null && card.Type == CardType.Unit)
@@ -1189,20 +1283,51 @@ public class CardView : MonoBehaviour
         return "CardPrefabs/OrderCard_Hand";
     }
 
-    private TextMesh CreateCardText(string textName, Vector3 localPosition, float characterSize, TextAnchor anchor, Color color)
+    private TMP_Text CreateCardText(string textName, Vector3 localPosition, float characterSize, TextAnchor anchor, Color color)
     {
         GameObject textObject = new GameObject(textName);
         textObject.transform.SetParent(transform, false);
         textObject.transform.localPosition = localPosition;
         textObject.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
 
-        TextMesh textMesh = textObject.AddComponent<TextMesh>();
-        textMesh.anchor = anchor;
-        textMesh.alignment = TextAlignment.Center;
-        textMesh.characterSize = characterSize;
-        textMesh.fontSize = 384;
+        TMP_Text textMesh = textObject.AddComponent<TextMeshPro>();
+        ConfigureTmpText(textMesh, characterSize, anchor);
         textMesh.color = color;
         return textMesh;
+    }
+
+    private static void ConfigureTmpText(TMP_Text text, float characterSize, TextAnchor anchor)
+    {
+        text.fontSize = characterSize * 150f;
+        text.alignment = TmpAlignment(anchor);
+        text.enableWordWrapping = true;
+        text.overflowMode = TextOverflowModes.Overflow;
+        CardTmpFont.Apply(text);
+    }
+
+    private static TextAlignmentOptions TmpAlignment(TextAnchor anchor)
+    {
+        switch (anchor)
+        {
+            case TextAnchor.UpperLeft:
+                return TextAlignmentOptions.TopLeft;
+            case TextAnchor.UpperCenter:
+                return TextAlignmentOptions.Top;
+            case TextAnchor.UpperRight:
+                return TextAlignmentOptions.TopRight;
+            case TextAnchor.MiddleLeft:
+                return TextAlignmentOptions.MidlineLeft;
+            case TextAnchor.MiddleRight:
+                return TextAlignmentOptions.MidlineRight;
+            case TextAnchor.LowerLeft:
+                return TextAlignmentOptions.BottomLeft;
+            case TextAnchor.LowerCenter:
+                return TextAlignmentOptions.Bottom;
+            case TextAnchor.LowerRight:
+                return TextAlignmentOptions.BottomRight;
+            default:
+                return TextAlignmentOptions.Center;
+        }
     }
 
     private MeshRenderer CreateInsetPanel(string panelName, Vector3 localPosition, Vector3 localScale, Color color)
@@ -1215,8 +1340,7 @@ public class CardView : MonoBehaviour
         RuntimeSafeDestroy.Destroy(panel.GetComponent<Collider>());
 
         MeshRenderer renderer = panel.GetComponent<MeshRenderer>();
-        renderer.material = new Material(Shader.Find("Standard"));
-        renderer.material.color = color;
+        renderer.material = CreateRuntimeColorMaterial(color);
         return renderer;
     }
 
@@ -1266,7 +1390,7 @@ public class CardView : MonoBehaviour
         }
 
         discardOverlayRenderer = discardOverlay.GetComponent<MeshRenderer>();
-        discardOverlayRenderer.material = new Material(Shader.Find("Standard"));
+        discardOverlayRenderer.material = CreateRuntimeTextureMaterial(Color.white);
         Texture2D discardTexture = SceneIconRegistry.Active != null
             ? SceneIconRegistry.Active.DiscardThisCardIcon
             : Resources.Load<Texture2D>("Icons/DiscardThisCard");
@@ -1286,7 +1410,6 @@ public class CardView : MonoBehaviour
         }
 
         damagePreviewLabel = CreateCardText("Damage Preview Label", new Vector3(0f, 0.132f, 0f), 0.13f, TextAnchor.MiddleCenter, new Color(1f, 0.24f, 0.14f));
-        damagePreviewLabel.fontSize = 256;
         SetTextVisible(damagePreviewLabel, false);
 
         damagePreviewSkullObject = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -1302,7 +1425,7 @@ public class CardView : MonoBehaviour
         }
 
         damagePreviewSkullRenderer = damagePreviewSkullObject.GetComponent<MeshRenderer>();
-        damagePreviewSkullRenderer.material = new Material(Shader.Find("Standard"));
+        damagePreviewSkullRenderer.material = CreateRuntimeTextureMaterial(Color.white);
         Texture2D skullTexture = SceneIconRegistry.Active != null
             ? SceneIconRegistry.Active.EstimatedDeathSkullIcon
             : Resources.Load<Texture2D>("Icons/EstimatedDeathSkull");
@@ -1341,7 +1464,7 @@ public class CardView : MonoBehaviour
         }
 
         MeshRenderer renderer = iconObject.GetComponent<MeshRenderer>();
-        renderer.material = new Material(Shader.Find("Standard"));
+        renderer.material = CreateRuntimeTextureMaterial(Color.white);
         Texture2D iconTexture = KeywordIconTexture(keyword);
         if (iconTexture != null)
         {
@@ -1356,12 +1479,9 @@ public class CardView : MonoBehaviour
         labelObject.transform.SetParent(iconObject.transform, false);
         labelObject.transform.localPosition = new Vector3(0f, 0f, -0.02f);
         labelObject.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        TextMesh textMesh = labelObject.AddComponent<TextMesh>();
+        TMP_Text textMesh = labelObject.AddComponent<TextMeshPro>();
         textMesh.text = CardKeywordIconRules.Label(keyword);
-        textMesh.characterSize = 0.018f;
-        textMesh.fontSize = 64;
-        textMesh.anchor = TextAnchor.MiddleCenter;
-        textMesh.alignment = TextAlignment.Center;
+        ConfigureTmpText(textMesh, 0.018f, TextAnchor.MiddleCenter);
         textMesh.color = Color.white;
         keywordIconObjects.Add(iconObject);
     }
@@ -1442,17 +1562,10 @@ public class CardView : MonoBehaviour
         CardOperationBadgeState state = CardOperationBadgeRules.State(card, availableKredits);
         if (state == CardOperationBadgeState.Hidden)
         {
-            costBadgeRenderer.material.color = new Color(0.09f, 0.085f, 0.045f);
-            costLabel.color = new Color(1f, 0.87f, 0.42f);
             return;
         }
 
         costLabel.text = CardOperationBadgeRules.Text(card, availableKredits);
-        costBadgeRenderer.material.color = OperationBadgeColor(state);
-        costLabel.color = state == CardOperationBadgeState.Ready
-            ? new Color(0.08f, 0.06f, 0.02f)
-            : new Color(1f, 0.88f, 0.38f);
-
         if (statusLabel != null && string.IsNullOrEmpty(statusLabel.text))
         {
             statusLabel.text = OperationStateLabel(state);
@@ -1544,7 +1657,8 @@ public class CardView : MonoBehaviour
             }
         }
 
-        return new Material(Shader.Find("Standard"));
+        Color fallbackColor = hidden || card == null ? new Color(0.17f, 0.19f, 0.23f) : ArtColor(card);
+        return CreateRuntimeColorMaterial(fallbackColor);
     }
 
     private Color RarityColor(CardRarity rarity)

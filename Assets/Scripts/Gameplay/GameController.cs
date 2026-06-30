@@ -64,6 +64,7 @@ public class GameController : MonoBehaviour
     private int selectedDeckSlot = 1;
     private RuntimeCard inspectedCard;
     private RuntimeCard centerInspectCard;
+    private string hoveredHandCardId;
     private string pendingDeployDropCardId;
     private readonly List<PendingDrawAnimation> pendingDrawAnimations = new List<PendingDrawAnimation>();
     private RuntimeCard pendingAirborneUnit;
@@ -441,7 +442,27 @@ public class GameController : MonoBehaviour
         }
 
         inspectedCard = view.Card;
+        if (view.Card.Zone == CardZone.Hand && view.Card.Owner == PlayerSide.Player)
+        {
+            if (hoveredHandCardId != view.Card.Id)
+            {
+                hoveredHandCardId = view.Card.Id;
+                RefreshAllViews();
+            }
+        }
+
         RefreshSceneInspector();
+    }
+
+    public void HandleCardHoverEnded(CardView view)
+    {
+        if (view == null || view.Card == null || hoveredHandCardId != view.Card.Id)
+        {
+            return;
+        }
+
+        hoveredHandCardId = null;
+        RefreshAllViews();
     }
 
     public void HandleCardReleased(CardView view, Vector3 releasePosition)
@@ -4594,6 +4615,7 @@ public class GameController : MonoBehaviour
             Vector3 position = centerInspect
                 ? PlayableSceneRules.CenterInspectAnchor
                 : (mulliganPresentation ? MulliganHandPosition(i, hand.Count) : HandPosition(side, i, hand.Count));
+            position += FocusedHandHoverOffset(hand, side, i, mulliganPresentation);
             float scale = centerInspect
                 ? PlayableSceneRules.CenterInspectScale
                 : (mulliganPresentation ? PlayableSceneRules.MulliganHandScale : PlayableSceneRules.HandCardScale);
@@ -4658,6 +4680,32 @@ public class GameController : MonoBehaviour
         float baseRotation = side == PlayerSide.Enemy ? 180f : 0f;
         float fanRotation = 0f;
         return Quaternion.Euler(0f, baseRotation + fanRotation, 0f);
+    }
+
+    private Vector3 FocusedHandHoverOffset(List<RuntimeCard> hand, PlayerSide side, int index, bool mulliganPresentation)
+    {
+        if (side != PlayerSide.Player || mulliganPresentation || string.IsNullOrEmpty(hoveredHandCardId))
+        {
+            return Vector3.zero;
+        }
+
+        int hoveredIndex = -1;
+        for (int i = 0; i < hand.Count; i++)
+        {
+            if (hand[i] != null && hand[i].Id == hoveredHandCardId)
+            {
+                hoveredIndex = i;
+                break;
+            }
+        }
+
+        if (hoveredIndex < 0 || index == hoveredIndex)
+        {
+            return Vector3.zero;
+        }
+
+        float direction = index < hoveredIndex ? -1f : 1f;
+        return Vector3.right * direction * 0.52f;
     }
 
     private void CreateCountermeasureViews(PlayerState state, float z)

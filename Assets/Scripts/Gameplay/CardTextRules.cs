@@ -29,8 +29,62 @@ public static class CardTextRules
             return string.Empty;
         }
 
+        string displayName = DisplayCardName(card);
         const int maxLength = 18;
-        return card.CardName.Length <= maxLength ? card.CardName : card.CardName.Substring(0, maxLength - 1) + "…";
+        return displayName.Length <= maxLength ? displayName : displayName.Substring(0, maxLength - 1) + "…";
+    }
+
+    public static string DisplayCardName(RuntimeCard card)
+    {
+        return card == null ? string.Empty : DisplayCardName(card.CardName);
+    }
+
+    public static string DisplayCardName(string cardName)
+    {
+        if (string.IsNullOrWhiteSpace(cardName))
+        {
+            return string.Empty;
+        }
+
+        string trimmed = cardName.Trim();
+        string[] parts = trimmed.Split(' ');
+        if (parts.Length >= 2 && parts[0] == parts[1] && IsAscii(parts[0]))
+        {
+            return parts[0];
+        }
+
+        if (parts.Length > 1 && ContainsNonAscii(parts[0]))
+        {
+            return parts[0];
+        }
+
+        return trimmed;
+    }
+
+    private static bool ContainsNonAscii(string text)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] > 127)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsAscii(string text)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] > 127)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public static string StatusLabel(RuntimeCard card)

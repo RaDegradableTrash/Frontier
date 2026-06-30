@@ -20,6 +20,10 @@ public class BoardManager : MonoBehaviour
     private BoardPresentationSettings presentationSettings;
     private SlotInteract playerHeadquartersSlot;
     private SlotInteract enemyHeadquartersSlot;
+    private Transform rowsRoot;
+    private Transform surfaceRoot;
+    private Transform labelsRoot;
+    private Transform markersRoot;
     private TextMesh playerHeadquartersStrength;
     private TextMesh enemyHeadquartersStrength;
     private TextMesh playerHeadquartersDamagePreview;
@@ -177,6 +181,7 @@ public class BoardManager : MonoBehaviour
         enemyHeadquartersDamagePreview = null;
         playerHeadquartersSkullPreview = null;
         enemyHeadquartersSkullPreview = null;
+        PrepareGeneratedHierarchy();
         int columns = Mathf.Max(frontlineColumns, supportColumns);
         grid = new SlotInteract[columns, 3];
 
@@ -207,9 +212,13 @@ public class BoardManager : MonoBehaviour
             enemyHeadquartersSlot = interact;
         }
 
+        Transform hqVisualRoot = CreateGeneratedGroup(interact.transform, "HQ Visual");
+        Transform hqFrameRoot = CreateGeneratedGroup(hqVisualRoot, "Frame");
+        Transform hqPreviewRoot = CreateGeneratedGroup(hqVisualRoot, "Preview");
+
         GameObject plate = GameObject.CreatePrimitive(PrimitiveType.Cube);
         plate.name = "HQ Card Body";
-        plate.transform.SetParent(interact.transform, false);
+        plate.transform.SetParent(hqFrameRoot, false);
         plate.transform.localPosition = new Vector3(0f, 0.025f, 0f);
         plate.transform.localScale = new Vector3(0.88f, 0.060f, 1.16f);
         DestroyGeneratedObject(plate.GetComponent<Collider>());
@@ -219,7 +228,7 @@ public class BoardManager : MonoBehaviour
 
         GameObject frame = GameObject.CreatePrimitive(PrimitiveType.Cube);
         frame.name = "HQ Card Frame";
-        frame.transform.SetParent(interact.transform, false);
+        frame.transform.SetParent(hqFrameRoot, false);
         frame.transform.localPosition = new Vector3(0f, 0.064f, 0f);
         frame.transform.localScale = new Vector3(0.94f, 0.014f, 1.22f);
         DestroyGeneratedObject(frame.GetComponent<Collider>());
@@ -227,31 +236,34 @@ public class BoardManager : MonoBehaviour
 
         GameObject face = GameObject.CreatePrimitive(PrimitiveType.Cube);
         face.name = "HQ Card Face";
-        face.transform.SetParent(interact.transform, false);
+        face.transform.SetParent(hqFrameRoot, false);
         face.transform.localPosition = new Vector3(0f, 0.078f, 0f);
         face.transform.localScale = new Vector3(0.78f, 0.012f, 1.02f);
         DestroyGeneratedObject(face.GetComponent<Collider>());
         AssignGeneratedMaterial(face.GetComponent<MeshRenderer>(), Color.Lerp(new Color(0.13f, 0.13f, 0.10f, 1f), tint, 0.35f));
 
         GameObject titlePlate = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        titlePlate.name = "HQ Title Plate";
-        titlePlate.transform.SetParent(interact.transform, false);
+        Transform titlePlateGroup = CreateGeneratedGroup(hqFrameRoot, "TitlePlate");
+        titlePlate.name = "Backing";
+        titlePlate.transform.SetParent(titlePlateGroup, false);
         titlePlate.transform.localPosition = new Vector3(0f, 0.092f, 0.39f);
         titlePlate.transform.localScale = new Vector3(0.64f, 0.014f, 0.16f);
         DestroyGeneratedObject(titlePlate.GetComponent<Collider>());
         AssignGeneratedMaterial(titlePlate.GetComponent<MeshRenderer>(), new Color(0.08f, 0.075f, 0.055f, 1f));
 
         GameObject healthBadge = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        healthBadge.name = "HQ Health Badge";
-        healthBadge.transform.SetParent(interact.transform, false);
+        Transform healthBadgeGroup = CreateGeneratedGroup(hqFrameRoot, "HealthBadge");
+        healthBadge.name = "Backing";
+        healthBadge.transform.SetParent(healthBadgeGroup, false);
         healthBadge.transform.localPosition = new Vector3(0f, 0.094f, -0.08f);
         healthBadge.transform.localScale = new Vector3(0.48f, 0.014f, 0.28f);
         DestroyGeneratedObject(healthBadge.GetComponent<Collider>());
         AssignGeneratedMaterial(healthBadge.GetComponent<MeshRenderer>(), new Color(0.045f, 0.047f, 0.040f, 1f));
 
-        CreateHeadquartersTextureLines(interact.transform, tint);
+        CreateHeadquartersTextureLines(hqFrameRoot, tint);
         TextMesh strengthText = CreateHeadquartersText(
-            interact.transform,
+            titlePlateGroup,
+            healthBadgeGroup,
             side == PlayerSide.Player ? "WASHINGTON" : "RANGOON",
             HeadquartersDisplayTextRules.Health(20));
         if (side == PlayerSide.Player)
@@ -264,7 +276,7 @@ public class BoardManager : MonoBehaviour
         }
 
         TextMesh previewText = CreateHeadquartersTextMesh(
-            interact.transform,
+            hqPreviewRoot,
             "HQ Damage Preview",
             string.Empty,
             new Vector3(0f, 0.126f, -0.08f),
@@ -277,7 +289,7 @@ public class BoardManager : MonoBehaviour
             previewRenderer.enabled = false;
         }
 
-        GameObject skullPreview = CreateHeadquartersSkullPreview(interact.transform);
+        GameObject skullPreview = CreateHeadquartersSkullPreview(hqPreviewRoot);
         if (side == PlayerSide.Player)
         {
             playerHeadquartersDamagePreview = previewText;
@@ -382,10 +394,10 @@ public class BoardManager : MonoBehaviour
         return skull;
     }
 
-    private TextMesh CreateHeadquartersText(Transform parent, string name, string strength)
+    private TextMesh CreateHeadquartersText(Transform titlePlateParent, Transform healthBadgeParent, string name, string strength)
     {
-        CreateHeadquartersTextMesh(parent, "HQ Name", name, new Vector3(0f, 0.09f, 0.36f), PlayableSceneRules.HeadquartersNameCharacterSize, TextAnchor.MiddleCenter);
-        return CreateHeadquartersTextMesh(parent, "HQ Strength", strength, new Vector3(0f, 0.095f, -0.06f), PlayableSceneRules.HeadquartersStrengthCharacterSize, TextAnchor.MiddleCenter);
+        CreateHeadquartersTextMesh(titlePlateParent, "HQ Name", name, new Vector3(0f, 0.09f, 0.36f), PlayableSceneRules.HeadquartersNameCharacterSize, TextAnchor.MiddleCenter);
+        return CreateHeadquartersTextMesh(healthBadgeParent, "HQ Strength", strength, new Vector3(0f, 0.095f, -0.06f), PlayableSceneRules.HeadquartersStrengthCharacterSize, TextAnchor.MiddleCenter);
     }
 
     private void CreateHeadquartersTextureLines(Transform parent, Color tint)
@@ -419,6 +431,45 @@ public class BoardManager : MonoBehaviour
         label.fontSize = 90;
         label.color = Color.white;
         return label;
+    }
+
+    private void PrepareGeneratedHierarchy()
+    {
+        rowsRoot = CreateGeneratedGroup(transform, "Rows");
+        surfaceRoot = CreateGeneratedGroup(transform, "Board Surface");
+        labelsRoot = CreateGeneratedGroup(transform, "Labels");
+        markersRoot = CreateGeneratedGroup(transform, "Markers");
+    }
+
+    private Transform CreateGeneratedGroup(Transform parent, string groupName)
+    {
+        GameObject groupObject = new GameObject(groupName);
+        groupObject.transform.SetParent(parent, false);
+        return groupObject.transform;
+    }
+
+    private Transform RowGroup(SlotZone zone)
+    {
+        if (rowsRoot == null)
+        {
+            rowsRoot = CreateGeneratedGroup(transform, "Rows");
+        }
+
+        string groupName = zone.ToString();
+        Transform existing = rowsRoot.Find(groupName);
+        return existing != null ? existing : CreateGeneratedGroup(rowsRoot, groupName);
+    }
+
+    private Transform SurfaceGroup(SlotZone zone)
+    {
+        if (surfaceRoot == null)
+        {
+            surfaceRoot = CreateGeneratedGroup(transform, "Board Surface");
+        }
+
+        string groupName = zone.ToString();
+        Transform existing = surfaceRoot.Find(groupName);
+        return existing != null ? existing : CreateGeneratedGroup(surfaceRoot, groupName);
     }
 
     private void ClearExistingSlots()
@@ -462,13 +513,15 @@ public class BoardManager : MonoBehaviour
         for (int x = 0; x < count; x++)
         {
             GameObject slotObject = new GameObject($"{zone}_{x}");
-            slotObject.transform.SetParent(transform, false);
+            slotObject.transform.SetParent(RowGroup(zone), false);
             slotObject.transform.localPosition = new Vector3(startX + x * SlotStepX, 0f, zOffset);
+            CreateGeneratedGroup(slotObject.transform, "HitArea");
+            Transform visualRoot = CreateGeneratedGroup(slotObject.transform, "Visual");
 
             BoxCollider collider = slotObject.AddComponent<BoxCollider>();
             collider.size = new Vector3(slotWidth, 0.08f, slotHeight);
 
-            SlotVisualize_Temp visual = slotObject.AddComponent<SlotVisualize_Temp>();
+            SlotVisualize_Temp visual = visualRoot.gameObject.AddComponent<SlotVisualize_Temp>();
             visual.Setup(CreateSlotCorners(), ResolveLineMaterial(), color);
 
             SlotInteract interact = slotObject.AddComponent<SlotInteract>();
@@ -494,10 +547,13 @@ public class BoardManager : MonoBehaviour
 
         for (int x = 0; x < count; x++)
         {
+            Transform cellRoot = CreateGeneratedGroup(SurfaceGroup(zone), $"{zone}_Board_Cell_{x}");
+            cellRoot.localPosition = new Vector3(startX + x * SlotStepX, 0f, zOffset);
+
             GameObject cell = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            cell.name = $"{zone}_Board_Cell_{x}";
-            cell.transform.SetParent(transform, false);
-            cell.transform.localPosition = new Vector3(startX + x * SlotStepX, 0.018f, zOffset);
+            cell.name = "Surface Tile";
+            cell.transform.SetParent(cellRoot, false);
+            cell.transform.localPosition = new Vector3(0f, 0.018f, 0f);
             cell.transform.localScale = new Vector3(slotWidth * 1.03f, 0.010f, slotHeight * 1.04f);
             DestroyGeneratedObject(cell.GetComponent<Collider>());
 
@@ -527,8 +583,10 @@ public class BoardManager : MonoBehaviour
 
     private void CreateLaneLabel(string text, Vector3 localPosition, Color color)
     {
-        GameObject labelObject = new GameObject($"Label_{text}");
-        labelObject.transform.SetParent(transform, false);
+        Transform labelRoot = CreateGeneratedGroup(labelsRoot != null ? labelsRoot : transform, $"Label_{text}");
+
+        GameObject labelObject = new GameObject("Text");
+        labelObject.transform.SetParent(labelRoot, false);
         labelObject.transform.localPosition = localPosition;
         labelObject.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
 
@@ -543,9 +601,10 @@ public class BoardManager : MonoBehaviour
 
     private void CreateHeadquartersMarker(string labelText, Vector3 localPosition, Color color)
     {
+        Transform markerRoot = CreateGeneratedGroup(markersRoot != null ? markersRoot : transform, labelText.Replace(" ", "_"));
         GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        marker.name = labelText.Replace(" ", "_");
-        marker.transform.SetParent(transform, false);
+        marker.name = "Backing";
+        marker.transform.SetParent(markerRoot, false);
         marker.transform.localPosition = localPosition;
         marker.transform.localScale = new Vector3(1.8f, 0.04f, 0.55f);
         DestroyGeneratedObject(marker.GetComponent<Collider>());
