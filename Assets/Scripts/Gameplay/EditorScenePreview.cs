@@ -45,6 +45,7 @@ public class EditorScenePreview : MonoBehaviour
         ClearPreviewChildren();
         CreatePreviewHands();
         CreatePreviewStatus();
+        ApplyTabletopContourBackground();
         SetPreviewCommandButtons();
         previewBuilt = true;
     }
@@ -192,6 +193,32 @@ public class EditorScenePreview : MonoBehaviour
                 || button.Command == SceneCommandType.StrikeBoard;
             button.SetAvailable(visible);
             button.SetVisible(visible);
+        }
+    }
+
+    private void ApplyTabletopContourBackground()
+    {
+        GameObject tabletop = GameObject.Find("DesktopQuad");
+        if (tabletop == null)
+        {
+            return;
+        }
+
+        DeskContourTerrainGenerator generator = tabletop.GetComponent<DeskContourTerrainGenerator>();
+        if (generator == null)
+        {
+            generator = tabletop.AddComponent<DeskContourTerrainGenerator>();
+        }
+
+        if (generator.CurrentContourStyle != DeskContourTerrainGenerator.ContourStyle.ReferenceMatchBackdrop
+            || !generator.IsTablePresetApplied
+            || !generator.HasGeneratedTexture)
+        {
+            generator.ApplyReferenceMatchBackdropPresetReferenceImageMatchTarget();
+        }
+        else
+        {
+            generator.ApplyTabletopSciFiPresetIfNeeded();
         }
     }
 

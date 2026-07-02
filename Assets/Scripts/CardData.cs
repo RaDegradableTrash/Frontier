@@ -6,7 +6,7 @@ public class CardData : ScriptableObject
     public int id;
     public string cardName;
     public string nation;
-    public CardFaction faction = CardFaction.Britain;
+    public CardFaction faction = CardFaction.Endfield;
     public CardRarity rarity = CardRarity.Standard;
     public CardType type = CardType.Unit;
     [Min(0)] public int kreditCost = 1;
@@ -17,6 +17,7 @@ public class CardData : ScriptableObject
     public int effectAmount;
     public CardKeyword keywords = CardKeyword.None;
     public string addedCardName;
+    public CardRule[] specialRules;
     public Sprite artwork;
     public int attack = 1;
     public int defense = 1;
@@ -41,6 +42,7 @@ public class CardData : ScriptableObject
             EffectType = effectType,
             EffectAmount = effectAmount,
             AddedCardName = addedCardName,
+            SpecialRules = specialRules,
             Keywords = keywords,
             Owner = owner,
             Zone = CardZone.Deck

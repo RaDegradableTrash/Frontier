@@ -2,7 +2,7 @@ using UnityEngine;
 
 public static class RuntimeSafeDestroy
 {
-    public static void Destroy(Object target)
+    public static void Destroy(UnityEngine.Object target)
     {
         if (target == null)
         {
@@ -11,11 +11,11 @@ public static class RuntimeSafeDestroy
 
         if (Application.isPlaying)
         {
-            Object.Destroy(target);
+            UnityEngine.Object.Destroy(target);
         }
         else
         {
-            Object.DestroyImmediate(target);
+            UnityEngine.Object.DestroyImmediate(target);
         }
     }
 }

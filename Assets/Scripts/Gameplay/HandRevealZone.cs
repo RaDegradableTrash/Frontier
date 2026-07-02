@@ -12,12 +12,10 @@ public class HandRevealZone : MonoBehaviour
 
     private void OnMouseEnter()
     {
-        SetRevealed(true);
     }
 
     private void OnMouseOver()
     {
-        SetRevealed(true);
     }
 
     private void OnMouseDown()
@@ -27,7 +25,6 @@ public class HandRevealZone : MonoBehaviour
 
     private void OnMouseExit()
     {
-        SetRevealed(false);
     }
 
     private void SetRevealed(bool revealed)

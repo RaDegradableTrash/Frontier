@@ -18,9 +18,18 @@ public class DragTargetArrow : MonoBehaviour
 
     public void Initialize()
     {
-        shadowRenderer = gameObject.AddComponent<LineRenderer>();
+        if (lineRenderer != null)
+        {
+            return;
+        }
+
+        shadowRenderer = CreateChildLineRenderer("Arrow Shadow");
         ConfigureRenderer(shadowRenderer, 0.090f, 0.060f, new Color(0.02f, 0.025f, 0.03f, 0.78f), new Color(0.02f, 0.025f, 0.03f, 0.78f));
-        lineRenderer = gameObject.AddComponent<LineRenderer>();
+        lineRenderer = gameObject.GetComponent<LineRenderer>();
+        if (lineRenderer == null)
+        {
+            lineRenderer = gameObject.AddComponent<LineRenderer>();
+        }
         ConfigureRenderer(lineRenderer, 0.055f, 0.040f, new Color(0.96f, 0.98f, 1f, 0.98f), new Color(0.78f, 0.88f, 1f, 0.98f));
         leftHeadShadowRenderer = CreateArrowHeadRenderer("Arrow Head Shadow Left", true);
         rightHeadShadowRenderer = CreateArrowHeadRenderer("Arrow Head Shadow Right", true);
@@ -83,9 +92,7 @@ public class DragTargetArrow : MonoBehaviour
 
     private LineRenderer CreateArrowHeadRenderer(string rendererName, bool shadow)
     {
-        GameObject arrowHead = new GameObject(rendererName);
-        arrowHead.transform.SetParent(transform, false);
-        LineRenderer renderer = arrowHead.AddComponent<LineRenderer>();
+        LineRenderer renderer = CreateChildLineRenderer(rendererName);
         ConfigureRenderer(
             renderer,
             shadow ? 0.085f : 0.055f,
@@ -93,6 +100,13 @@ public class DragTargetArrow : MonoBehaviour
             shadow ? new Color(0.02f, 0.025f, 0.03f, 0.78f) : new Color(0.96f, 0.98f, 1f, 0.98f),
             shadow ? new Color(0.02f, 0.025f, 0.03f, 0.78f) : new Color(0.78f, 0.88f, 1f, 0.98f));
         return renderer;
+    }
+
+    private LineRenderer CreateChildLineRenderer(string rendererName)
+    {
+        GameObject lineObject = new GameObject(rendererName);
+        lineObject.transform.SetParent(transform, false);
+        return lineObject.AddComponent<LineRenderer>();
     }
 
     private void ConfigureRenderer(LineRenderer renderer, float startWidth, float endWidth, Color startColor, Color endColor)

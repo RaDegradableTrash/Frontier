@@ -11,12 +11,7 @@ public class PlayerState
     public readonly List<RuntimeCard> Hand = new List<RuntimeCard>();
     public readonly List<RuntimeCard> Discard = new List<RuntimeCard>();
     public readonly List<RuntimeCard> Countermeasures = new List<RuntimeCard>();
-    public int DeploymentCostModifier;
-    public int OperationCostModifier;
     public int CardsPlayedThisTurn;
-    private int signalLostDeploymentPenalty;
-    private int signalLostOperationPenalty;
-    private int signalLostTurnsRemaining;
     private int pendingFieldIntelCards;
     private int gilbertaAuraSources;
 
@@ -27,22 +22,22 @@ public class PlayerState
 
     public int EffectiveDeploymentCost(int baseCost)
     {
-        return Mathf.Max(0, baseCost + DeploymentCostModifier);
+        return Mathf.Max(0, baseCost);
     }
 
     public int EffectiveOperationCost(int baseCost)
     {
-        return Mathf.Max(0, baseCost + OperationCostModifier - gilbertaAuraSources);
+        return Mathf.Max(0, baseCost - gilbertaAuraSources);
     }
 
     public int EffectiveDeploymentCost(RuntimeCard card)
     {
-        return card == null ? int.MaxValue : EffectiveDeploymentCost(card.KreditCost);
+        return card == null ? int.MaxValue : Mathf.Max(0, card.EffectiveDeploymentCost);
     }
 
     public int EffectiveOperationCost(RuntimeCard card)
     {
-        return card == null ? int.MaxValue : EffectiveOperationCost(card.OperationCost);
+        return card == null ? int.MaxValue : Mathf.Max(0, card.EffectiveOperationCost - gilbertaAuraSources);
     }
 
     public bool CanSpendDeploymentCost(int cost)
@@ -68,16 +63,6 @@ public class PlayerState
     public bool TrySpendOperationCost(int cost)
     {
         return TrySpendKredits(cost);
-    }
-
-    public void ApplySignalLostPenalty(int turns)
-    {
-        int penaltyTurns = Mathf.Max(1, turns);
-        DeploymentCostModifier += penaltyTurns;
-        OperationCostModifier += penaltyTurns;
-        signalLostDeploymentPenalty += penaltyTurns;
-        signalLostOperationPenalty += penaltyTurns;
-        signalLostTurnsRemaining += penaltyTurns;
     }
 
     public void RegisterCardPlayed()
@@ -120,28 +105,10 @@ public class PlayerState
 
     public int PendingFieldIntelCount => pendingFieldIntelCards;
 
-    private void ResolveSignalLostExpiration()
-    {
-        if (signalLostTurnsRemaining <= 0)
-        {
-            return;
-        }
-
-        signalLostTurnsRemaining--;
-        if (signalLostTurnsRemaining == 0)
-        {
-            DeploymentCostModifier -= signalLostDeploymentPenalty;
-            OperationCostModifier -= signalLostOperationPenalty;
-            signalLostDeploymentPenalty = 0;
-            signalLostOperationPenalty = 0;
-        }
-    }
-
     public void StartTurn()
     {
         MaxKredits = KreditRules.NextMaxKredits(MaxKredits);
         Kredits = KreditRules.RefilledKredits(MaxKredits);
-        ResolveSignalLostExpiration();
         CardsPlayedThisTurn = 0;
     }
 

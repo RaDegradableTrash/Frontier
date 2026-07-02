@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f4fab48646d24437a1f299773aac2d4, type: 3}
+  m_Name: FieldIntel
+  m_EditorClassIdentifier: 
+  id: 9
+  cardName: FIELD INTEL
+  nation: Endfield
+  faction: 0
+  rarity: 1
+  type: 2
+  kreditCost: 3
+  operationCost: 0
+  description: "\u654C\u65B9\u56DE\u5408\u7ED3\u675F\u65F6\uFF0C\u62BD\u82E5\u5E72\u5F20\u724C\uFF0C\u5176\u6570\u91CF\u4E0E\u672C\u56DE\u5408\u5185\u5BF9\u65B9\u6253\u51FA\u7684\u624B\u724C\u6570\u7B49\u540C\u3002"
+  trigger: 0
+  effectType: 15
+  effectAmount: 0
+  keywords: 0
+  addedCardName: 
+  specialRules:
+  - {fileID: 11400000, guid: 63c86264bc0f24f3495a44482ab097c3, type: 2}
+  artwork: {fileID: 0}
+  attack: 0
+  defense: 0

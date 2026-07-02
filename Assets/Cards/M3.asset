@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f4fab48646d24437a1f299773aac2d4, type: 3}
+  m_Name: M3
+  m_EditorClassIdentifier: 
+  id: 3
+  cardName: M3
+  nation: Endfield
+  faction: 0
+  rarity: 3
+  type: 0
+  kreditCost: 6
+  operationCost: 2
+  description: "\u5B88\u62A4\u3002\u70DF\u5E55\u3002\u653B\u51FB\u65F6\u4F7F\u6240\u6709\u53CB\u65B9\u76EE\u6807\u5177\u6709+1\u9632\u5FA1\u3002"
+  trigger: 0
+  effectType: 12
+  effectAmount: 1
+  keywords: 10
+  addedCardName: 
+  specialRules:
+  - {fileID: 11400000, guid: cc62d620d25444703a4555f539e6d9ae, type: 2}
+  artwork: {fileID: 0}
+  attack: 6
+  defense: 6

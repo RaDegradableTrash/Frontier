@@ -4,11 +4,7 @@ public class SceneVisualStyle : MonoBehaviour
 {
     public static SceneVisualStyle Active { get; private set; }
 
-    [SerializeField] private Material britainCardMaterial;
-    [SerializeField] private Material usaCardMaterial;
-    [SerializeField] private Material germanyCardMaterial;
-    [SerializeField] private Material sovietCardMaterial;
-    [SerializeField] private Material japanCardMaterial;
+    [SerializeField] private Material endfieldCardMaterial;
     [SerializeField] private Material countermeasureCardMaterial;
 
     private void Awake()
@@ -31,18 +27,6 @@ public class SceneVisualStyle : MonoBehaviour
             return countermeasureCardMaterial;
         }
 
-        switch (card != null ? card.Faction : CardFaction.Britain)
-        {
-            case CardFaction.USA:
-                return usaCardMaterial;
-            case CardFaction.Germany:
-                return germanyCardMaterial;
-            case CardFaction.Soviet:
-                return sovietCardMaterial;
-            case CardFaction.Japan:
-                return japanCardMaterial;
-            default:
-                return britainCardMaterial;
-        }
+        return endfieldCardMaterial;
     }
 }

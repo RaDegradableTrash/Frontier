@@ -127,12 +127,17 @@ public static class SceneGuidanceRules
 
         if (selectedCard.Zone == CardZone.PlayerSupport && !selectedCard.CanOperate(availableKredits))
         {
-            return $"SELECTED {ShortName(selectedCard)} — {CannotAdvancePrompt(selectedCard, availableKredits)}";
+            return $"SELECTED {ShortName(selectedCard)} — {CannotAttackPrompt(selectedCard, availableKredits)}";
         }
 
         if (selectedCard.Zone == CardZone.PlayerSupport && hasFrontlineController && frontlineController != selectedCard.Owner)
         {
-            return $"SELECTED {ShortName(selectedCard)} — ENEMY CONTROLS FRONTLINE. CLEAR IT BEFORE ADVANCING.";
+            return $"SELECTED {ShortName(selectedCard)} — CLICK ENEMY FRONTLINE UNIT TO ATTACK, OR CLEAR FRONTLINE BEFORE ADVANCING.";
+        }
+
+        if (selectedCard.Zone == CardZone.PlayerSupport)
+        {
+            return $"SELECTED {ShortName(selectedCard)} — CLICK ENEMY FRONTLINE UNIT TO ATTACK OR EMPTY FRONTLINE TO ADVANCE";
         }
 
         if (selectedCard.Zone == CardZone.Frontline)

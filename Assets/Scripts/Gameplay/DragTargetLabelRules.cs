@@ -2,6 +2,20 @@ public static class DragTargetLabelRules
 {
     public static string LabelFor(RuntimeCard card, SlotInteract targetSlot, bool legalAttackTarget)
     {
+        if (legalAttackTarget)
+        {
+            return "ATTACK";
+        }
+
+        if (card != null
+            && card.Zone == CardZone.PlayerSupport
+            && targetSlot != null
+            && targetSlot.Zone == SlotZone.Frontline
+            && targetSlot.IsOccupied)
+        {
+            return "TARGET";
+        }
+
         return LabelFor(card, targetSlot != null ? targetSlot.Zone : (SlotZone?)null, legalAttackTarget);
     }
 

@@ -192,7 +192,7 @@ public static class SceneHierarchyOrganizer
 
     private static void ReparentStartsWith(string prefix, Transform parent)
     {
-        GameObject[] objects = Object.FindObjectsOfType<GameObject>();
+        GameObject[] objects = UnityEngine.Object.FindObjectsOfType<GameObject>();
         foreach (GameObject target in objects)
         {
             if (target.name.StartsWith(prefix) && target.transform.parent != parent)
@@ -204,7 +204,7 @@ public static class SceneHierarchyOrganizer
 
     private static void ReparentContains(string fragment, Transform parent)
     {
-        GameObject[] objects = Object.FindObjectsOfType<GameObject>();
+        GameObject[] objects = UnityEngine.Object.FindObjectsOfType<GameObject>();
         foreach (GameObject target in objects)
         {
             if (target.name.Contains(fragment) && target.transform.parent != parent)

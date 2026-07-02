@@ -9,6 +9,9 @@ public class CardPrefabTemplate : MonoBehaviour
     public MeshRenderer dragShadowRenderer;
     public MeshRenderer costBadgeRenderer;
     public MeshRenderer operationBadgeRenderer;
+    public MeshRenderer primaryArtRenderer;
+    public MeshRenderer blurredFrameRenderer;
+    public MeshRenderer artFrameRenderer;
     public MeshRenderer[] selectionFrameRenderers;
 
     public TMP_Text titleLabel;

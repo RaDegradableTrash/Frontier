@@ -6,8 +6,5 @@ public enum SceneCommandType
     EndTurn,
     Restart,
     StrikeBoard,
-    SelectAlliedTempo,
-    SelectAxisArmor,
-    SelectSovietControl,
-    SelectJapanAmbush
+    SelectDeck
 }

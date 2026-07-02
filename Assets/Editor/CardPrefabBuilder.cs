@@ -7,12 +7,29 @@ using UnityEngine;
 public static class CardPrefabBuilder
 {
     private const string PrefabDirectory = "Assets/Resources/CardPrefabs";
+    private const string UnitHandPrefabPath = PrefabDirectory + "/UnitCard_Hand.prefab";
+    private const string OrderHandPrefabPath = PrefabDirectory + "/OrderCard_Hand.prefab";
+    private const string CounterHandPrefabPath = PrefabDirectory + "/CounterCard_Hand.prefab";
+    private const string BoardUnitPrefabPath = PrefabDirectory + "/UnitCard_Board.prefab";
     private const string MaterialDirectory = "Assets/Materials/CardPrefabGenerated";
+    private const string MeshDirectory = "Assets/Meshes/CardPrefabGenerated";
     private const string FontDirectory = "Assets/Resources/Fonts";
+    private const string RuntimeCardArtDirectory = "Assets/Resources/CardArt";
+    private const string RuntimeCardBlurDirectory = "Assets/Resources/CardArtBlur";
     private const string FontAssetPath = FontDirectory + "/FrontierChineseTMP.asset";
     private const string SourceFontAssetPath = FontDirectory + "/ArialUnicode.ttf";
     private const float CardWidth = 0.96f;
     private const float CardHeight = 1.30f;
+    private const string BoardUnitPrefabVersion = "square-board-unit-v14-2d";
+    private const string DefaultBoardArtPath = "Assets/Endfield/M3.png";
+    private const string UnitHandArtPath = "Assets/Endfield/M3.png";
+    private const string OrderHandArtPath = "Assets/Endfield/Dijiang.png";
+    private const string CounterHandArtPath = "Assets/Endfield/Rossi.jpg";
+    private const string BoardBlurTexturePath = MaterialDirectory + "/BoardUnitBlurredFrame.png";
+    private const string UnitHandBlurTexturePath = MaterialDirectory + "/UnitHandBlurredFrame.png";
+    private const string OrderHandBlurTexturePath = MaterialDirectory + "/OrderHandBlurredFrame.png";
+    private const string CounterHandBlurTexturePath = MaterialDirectory + "/CounterHandBlurredFrame.png";
+    private const int MaxBoardFuelDots = 8;
 
     static CardPrefabBuilder()
     {
@@ -24,7 +41,11 @@ public static class CardPrefabBuilder
     {
         Directory.CreateDirectory(PrefabDirectory);
         Directory.CreateDirectory(MaterialDirectory);
-        BuildUnitHandPrefab();
+        Directory.CreateDirectory(MeshDirectory);
+        Directory.CreateDirectory(RuntimeCardArtDirectory);
+        Directory.CreateDirectory(RuntimeCardBlurDirectory);
+        ExportRuntimeCardArtResources();
+        EnsureUnitHandPrefabExists();
         BuildUnitBoardPrefab();
         BuildOrderHandPrefab();
         BuildCounterHandPrefab();
@@ -40,10 +61,16 @@ public static class CardPrefabBuilder
             return;
         }
 
-        if (File.Exists($"{PrefabDirectory}/UnitCard_Hand.prefab")
-            && File.Exists($"{PrefabDirectory}/UnitCard_Board.prefab")
-            && File.Exists($"{PrefabDirectory}/OrderCard_Hand.prefab")
-            && File.Exists($"{PrefabDirectory}/CounterCard_Hand.prefab"))
+        if (File.Exists(BoardUnitPrefabPath) && (!IsBoardUnitPrefabCurrent() || BoardUnitPrefabHasMissingEllipseMeshes()))
+        {
+            RebuildCardPrefabs();
+            return;
+        }
+
+        if (File.Exists(UnitHandPrefabPath)
+            && File.Exists(BoardUnitPrefabPath)
+            && File.Exists(OrderHandPrefabPath)
+            && File.Exists(CounterHandPrefabPath))
         {
             return;
         }
@@ -55,32 +82,150 @@ public static class CardPrefabBuilder
     {
         GameObject root = CreateCardRoot("UnitCard_Hand", 0.032f, Palette.UnitPaper);
         CardPrefabTemplate template = root.GetComponent<CardPrefabTemplate>();
-        AddHandCardLayout(root.transform, template, "UNIT", true, Palette.UnitArt, Palette.UnitFrame);
+        AddHandCardLayout(root.transform, template, "UNIT", true, Palette.UnitArt, Palette.UnitFrame, UnitHandArtPath, UnitHandBlurTexturePath);
         Save(root, "UnitCard_Hand");
+    }
+
+    private static void EnsureUnitHandPrefabExists()
+    {
+        if (File.Exists(UnitHandPrefabPath))
+        {
+            return;
+        }
+
+        BuildUnitHandPrefab();
     }
 
     private static void BuildUnitBoardPrefab()
     {
-        GameObject root = CreateCardRoot("UnitCard_Board", 0.050f, Palette.BoardPaper);
+        GameObject root = CreateBoardUnitRoot();
         CardPrefabTemplate template = root.GetComponent<CardPrefabTemplate>();
         AddBoardUnitLayout(root.transform, template);
         Save(root, "UnitCard_Board");
     }
 
+    private static bool IsBoardUnitPrefabCurrent()
+    {
+        string path = BoardUnitPrefabPath;
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        return File.ReadAllText(path).Contains(BoardUnitPrefabVersion);
+    }
+
+    private static bool BoardUnitPrefabHasMissingEllipseMeshes()
+    {
+        string path = BoardUnitPrefabPath;
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        if (prefab == null)
+        {
+            return true;
+        }
+
+        string[] ellipseNames = { "LowerLeftArc", "LowerRightArc", "FuelDot_0", "FuelDot_1" };
+        for (int i = 0; i < ellipseNames.Length; i++)
+        {
+            Transform child = FindDeepChild(prefab.transform, ellipseNames[i]);
+            MeshFilter filter = child != null ? child.GetComponent<MeshFilter>() : null;
+            if (filter == null || filter.sharedMesh == null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static Transform FindDeepChild(Transform root, string childName)
+    {
+        if (root == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform child = root.GetChild(i);
+            if (child.name == childName)
+            {
+                return child;
+            }
+
+            Transform nested = FindDeepChild(child, childName);
+            if (nested != null)
+            {
+                return nested;
+            }
+        }
+
+        return null;
+    }
+
     private static void BuildOrderHandPrefab()
     {
+        if (BuildHandPrefabFromUnitStyle("OrderCard_Hand", "ORDER", false))
+        {
+            return;
+        }
+
         GameObject root = CreateCardRoot("OrderCard_Hand", 0.032f, Palette.OrderPaper);
         CardPrefabTemplate template = root.GetComponent<CardPrefabTemplate>();
-        AddHandCardLayout(root.transform, template, "ORDER", false, Palette.OrderArt, Palette.OrderFrame);
+        AddHandCardLayout(root.transform, template, "ORDER", false, Palette.OrderArt, Palette.OrderFrame, OrderHandArtPath, OrderHandBlurTexturePath);
         Save(root, "OrderCard_Hand");
     }
 
     private static void BuildCounterHandPrefab()
     {
+        if (BuildHandPrefabFromUnitStyle("CounterCard_Hand", "COUNTER", false))
+        {
+            return;
+        }
+
         GameObject root = CreateCardRoot("CounterCard_Hand", 0.032f, Palette.CounterPaper);
         CardPrefabTemplate template = root.GetComponent<CardPrefabTemplate>();
-        AddHandCardLayout(root.transform, template, "COUNTER", false, Palette.CounterArt, Palette.CounterFrame);
+        AddHandCardLayout(root.transform, template, "COUNTER", false, Palette.CounterArt, Palette.CounterFrame, CounterHandArtPath, CounterHandBlurTexturePath);
         Save(root, "CounterCard_Hand");
+    }
+
+    private static bool BuildHandPrefabFromUnitStyle(string targetName, string previewTitle, bool showStats)
+    {
+        GameObject sourcePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(UnitHandPrefabPath);
+        if (sourcePrefab == null)
+        {
+            return false;
+        }
+
+        GameObject root = PrefabUtility.InstantiatePrefab(sourcePrefab) as GameObject;
+        if (root == null)
+        {
+            return false;
+        }
+
+        root.name = targetName;
+        CardPrefabTemplate template = root.GetComponent<CardPrefabTemplate>();
+        if (template != null)
+        {
+            if (template.titleLabel != null)
+            {
+                template.titleLabel.text = previewTitle;
+            }
+
+            if (template.statusLabel != null)
+            {
+                template.statusLabel.text = string.Empty;
+            }
+        }
+
+        Transform stats = FindDeepChild(root.transform, "Stats");
+        if (stats != null)
+        {
+            stats.gameObject.SetActive(showStats);
+        }
+
+        Save(root, targetName);
+        return true;
     }
 
     private static GameObject CreateCardRoot(string name, float thickness, Color paperColor)
@@ -111,20 +256,54 @@ public static class CardPrefabBuilder
         return root;
     }
 
-    private static void AddHandCardLayout(Transform root, CardPrefabTemplate template, string previewTitle, bool hasUnitStats, Color artColor, Color frameColor)
+    private static GameObject CreateBoardUnitRoot()
+    {
+        GameObject root = new GameObject("UnitCard_Board");
+        root.transform.localPosition = Vector3.zero;
+        root.transform.localRotation = Quaternion.identity;
+        root.transform.localScale = Vector3.one;
+        root.AddComponent<CardPrefabTemplate>();
+
+        CardPrefabTemplate template = root.GetComponent<CardPrefabTemplate>();
+        Transform cardBody = CreateGroup(root.transform, "CardBody");
+        Transform interactionGroup = CreateGroup(root.transform, "Interaction");
+        Transform metadata = CreateGroup(root.transform, BoardUnitPrefabVersion);
+        metadata.gameObject.hideFlags = HideFlags.HideInHierarchy;
+
+        template.faceRenderer = AddPanel(cardBody, "Face", 0f, 0f, CardWidth, CardWidth, 0.000f, 0.001f, Palette.BoardPaper);
+        AddPanel(cardBody, "OuterBorder", 0f, 0f, CardWidth * 1.035f, CardWidth * 1.035f, -0.006f, 0.001f, Palette.BoardOuterFrame);
+
+        Transform dragShadow = CreateGroup(interactionGroup, "DragShadow");
+        template.dragShadowRenderer = AddPanel(dragShadow, "Shadow", 0.035f, -0.035f, CardWidth * 0.98f, CardWidth * 0.98f, -0.020f, 0.010f, Palette.Shadow);
+        template.dragShadowRenderer.enabled = false;
+
+        Transform hoverFrame = CreateGroup(interactionGroup, "HoverFrame");
+        template.selectionRenderer = AddPanel(hoverFrame, "WhiteFrame", 0f, 0f, CardWidth * 1.05f, CardWidth * 1.05f, 0.080f, 0.010f, Color.white);
+        template.selectionRenderer.enabled = false;
+
+        Transform selectionFrame = CreateGroup(interactionGroup, "SelectionFrame");
+        template.selectionFrameRenderers = CreateSquareFrame(selectionFrame, "Edge", Palette.WhiteFrame);
+        return root;
+    }
+
+    private static void AddHandCardLayout(Transform root, CardPrefabTemplate template, string previewTitle, bool hasUnitStats, Color artColor, Color frameColor, string artPath, string blurTexturePath)
     {
         Transform cardBody = GetOrCreateGroup(root, "CardBody");
         Transform header = CreateGroup(root, "Header");
         Transform artwork = CreateGroup(root, "Artwork");
         Transform rules = CreateGroup(root, "Rules");
-        Transform interaction = GetOrCreateGroup(root, "Interaction");
+        Texture2D handArt = ResolveArtTexture(artPath);
+        Texture2D handBlur = ResolveBlurTexture(artPath, blurTexturePath);
 
+        template.blurredFrameRenderer = AddTexturedPanel(cardBody, "BlurredImageFrame", 0f, 0f, CardWidth * 1.050f, CardHeight * 1.050f, -0.012f, 0.010f, frameColor, handBlur, true);
         AddPanel(cardBody, "InnerBorder", 0f, 0f, CardWidth * 0.90f, CardHeight * 0.91f, 0.018f, 0.010f, frameColor);
         AddPanel(cardBody, "PaperInset", 0f, -0.010f, CardWidth * 0.84f, CardHeight * 0.83f, 0.024f, 0.008f, Palette.PaperInset);
 
         Transform costBadge = CreateGroup(header, "CostBadge");
         template.costBadgeRenderer = AddPanel(costBadge, "Backing", -CardWidth * 0.365f, CardHeight * 0.405f, 0.155f, 0.155f, 0.050f, 0.020f, Palette.CostBadge);
         template.costLabel = CreateText(costBadge, "CostNumber", "5", -CardWidth * 0.365f, CardHeight * 0.405f, 0.010f, TextAlignmentOptions.Center, Palette.NumberText);
+        template.operationBadgeRenderer = AddPanel(costBadge, "OperationBacking", -CardWidth * 0.285f, CardHeight * 0.347f, 0.070f, 0.070f, 0.052f, 0.014f, Palette.OperationBadge);
+        template.operationLabel = CreateText(costBadge, "OperationNumber", "2", -CardWidth * 0.285f, CardHeight * 0.347f, 0.0048f, TextAlignmentOptions.Center, Palette.NumberText);
 
         Transform titlePlate = CreateGroup(header, "TitlePlate");
         AddPanel(titlePlate, "Backing", CardWidth * 0.055f, CardHeight * 0.405f, CardWidth * 0.610f, 0.135f, 0.045f, 0.012f, Palette.TitlePlate);
@@ -134,19 +313,21 @@ public static class CardPrefabBuilder
         AddPanel(flagPlate, "Backing", CardWidth * 0.380f, CardHeight * 0.405f, 0.135f, 0.135f, 0.046f, 0.012f, frameColor);
 
         Transform artFrame = CreateGroup(artwork, "ArtFrame");
-        AddPanel(artFrame, "Frame", 0f, CardHeight * 0.105f, CardWidth * 0.805f, CardHeight * 0.490f, 0.038f, 0.012f, Palette.ArtFrame);
+        float handArtWidth = CardWidth * 0.760f;
+        float handArtHeight = CardHeight * 0.575f;
+        float handArtZ = CardHeight * 0.080f;
+        template.artFrameRenderer = AddTexturedPanel(artFrame, "Frame", 0f, handArtZ, handArtWidth + 0.055f, handArtHeight + 0.055f, 0.038f, 0.001f, Palette.ArtFrame, handBlur, true);
         Transform artPanel = CreateGroup(artwork, "ArtPanel");
-        AddPanel(artPanel, "Image", 0f, CardHeight * 0.105f, CardWidth * 0.745f, CardHeight * 0.430f, 0.052f, 0.010f, artColor);
-        AddArtStripes(artPanel, artColor);
+        template.primaryArtRenderer = AddTexturedPanel(artPanel, "Image", 0f, handArtZ, handArtWidth, handArtHeight, 0.052f, 0.001f, artColor, handArt, false);
 
         Transform rulesPlate = CreateGroup(rules, "RulesPlate");
         AddPanel(rulesPlate, "Backing", 0f, -CardHeight * 0.285f, CardWidth * 0.805f, CardHeight * 0.205f, 0.040f, 0.012f, Palette.RulesPlate);
-        template.statusLabel = CreateText(rulesPlate, "RulesLabel", hasUnitStats ? "KEYWORD / EFFECT" : "EFFECT", 0f, -CardHeight * 0.285f, 0.0034f, TextAlignmentOptions.Center, Palette.RulesText);
+        template.statusLabel = CreateText(rulesPlate, "RulesLabel", string.Empty, 0f, -CardHeight * 0.285f, 0.0034f, TextAlignmentOptions.Center, Palette.RulesText);
 
         Transform rarityBand = CreateGroup(cardBody, "RarityBand");
         template.rarityBandRenderer = AddPanel(rarityBand, "Backing", 0f, -CardHeight * 0.475f, CardWidth * 0.135f, 0.030f, 0.052f, 0.010f, Palette.RarityGold);
 
-        template.selectionLabel = CreateText(interaction, "SelectionLabel", string.Empty, 0f, 0f, 0.012f, TextAlignmentOptions.Center, Palette.RulesText);
+        template.selectionLabel = CreateText(GetOrCreateGroup(root, "Interaction"), "SelectionLabel", string.Empty, 0f, 0f, 0.012f, TextAlignmentOptions.Center, Palette.RulesText);
 
         if (!hasUnitStats)
         {
@@ -160,29 +341,36 @@ public static class CardPrefabBuilder
     private static void AddBoardUnitLayout(Transform root, CardPrefabTemplate template)
     {
         Transform cardBody = GetOrCreateGroup(root, "CardBody");
-        Transform header = CreateGroup(root, "Header");
-        Transform artwork = CreateGroup(root, "Artwork");
         Transform stats = CreateGroup(root, "Stats");
-        Transform interaction = GetOrCreateGroup(root, "Interaction");
 
-        AddPanel(cardBody, "InnerBorder", 0f, 0f, CardWidth * 0.88f, CardHeight * 0.90f, 0.020f, 0.012f, Palette.BoardFrame);
+        AddPanel(cardBody, "ReferenceOuterFrame", 0f, 0f, CardWidth * 0.985f, CardWidth * 0.985f, 0.020f, 0.001f, Palette.BoardFrame);
+        template.primaryArtRenderer = AddTexturedPanel(cardBody, "ReferenceImage", 0f, CardWidth * 0.145f, CardWidth * 0.720f, CardWidth * 0.720f, 0.028f, 0.001f, Palette.BoardInterior, ResolveBoardArtTexture(), false);
+        AddArcPanel(cardBody, "LowerLeftArc", -CardWidth * 0.455f, -CardWidth * 0.455f, CardWidth * 0.285f, CardWidth * 0.285f, 0f, 90f, 0.050f, Palette.BoardFrame);
+        AddArcPanel(cardBody, "LowerRightArc", CardWidth * 0.455f, -CardWidth * 0.455f, CardWidth * 0.285f, CardWidth * 0.285f, 90f, 180f, 0.050f, Palette.BoardFrame);
+        Transform fuelDots = CreateGroup(cardBody, "FuelDots");
+        for (int i = 0; i < MaxBoardFuelDots; i++)
+        {
+            MeshRenderer dot = AddEllipsePanel(fuelDots, $"FuelDot_{i}", FuelDotX(i, 2), -CardWidth * 0.355f, CardWidth * 0.050f, CardWidth * 0.050f, 0.080f, Palette.BoardDot);
+            dot.enabled = i < 2;
+        }
 
-        Transform artPanel = CreateGroup(artwork, "ArtPanel");
-        AddPanel(artPanel, "Image", 0f, CardHeight * 0.080f, CardWidth * 0.760f, CardHeight * 0.600f, 0.045f, 0.014f, Palette.BoardArt);
-
-        Transform titlePlate = CreateGroup(header, "TitlePlate");
-        AddPanel(titlePlate, "Backing", 0f, CardHeight * 0.425f, CardWidth * 0.660f, 0.120f, 0.055f, 0.012f, Palette.BoardTitle);
-        template.titleLabel = CreateText(titlePlate, "TitleLabel", "UNIT", 0f, CardHeight * 0.425f, 0.0042f, TextAlignmentOptions.Center, Palette.BoardTitleText);
-
-        Transform costBadge = CreateGroup(header, "CostBadge");
-        template.costBadgeRenderer = AddPanel(costBadge, "Backing", -CardWidth * 0.370f, CardHeight * 0.425f, 0.150f, 0.150f, 0.060f, 0.020f, Palette.CostBadge);
-        template.costLabel = CreateText(costBadge, "CostNumber", "5", -CardWidth * 0.370f, CardHeight * 0.425f, 0.010f, TextAlignmentOptions.Center, Palette.NumberText);
+        Transform keywordColumn = CreateGroup(root, "KeywordColumn");
+        AddPanel(keywordColumn, "KeywordSlotTop", CardWidth * 0.635f, CardWidth * 0.305f, 0.175f, 0.175f, 0.032f, 0.006f, Palette.BoardKeywordSlot);
+        AddPanel(keywordColumn, "KeywordSlotBottom", CardWidth * 0.635f, CardWidth * 0.105f, 0.175f, 0.175f, 0.032f, 0.006f, Palette.BoardKeywordSlot);
 
         Transform rarityBand = CreateGroup(cardBody, "RarityBand");
-        template.rarityBandRenderer = AddPanel(rarityBand, "Backing", 0f, -CardHeight * 0.485f, CardWidth * 0.115f, 0.028f, 0.060f, 0.010f, Palette.RarityGold);
+        template.rarityBandRenderer = AddPanel(rarityBand, "Backing", 0f, -CardWidth * 0.475f, CardWidth * 0.100f, 0.022f, 0.042f, 0.006f, Palette.BoardFrame);
 
-        template.selectionLabel = CreateText(interaction, "SelectionLabel", string.Empty, 0f, 0f, 0.012f, TextAlignmentOptions.Center, Palette.RulesText);
-        AddStatCluster(stats, template, CardHeight * -0.380f, 0.060f);
+        AddBoardStatCluster(stats, template, CardWidth * -0.380f, 0.070f);
+    }
+
+    private static void AddBoardStatCluster(Transform statsGroup, CardPrefabTemplate template, float z, float y)
+    {
+        Transform attackBadge = CreateGroup(statsGroup, "AttackValue");
+        template.attackLabel = CreateText(attackBadge, "AttackNumber", "4", -CardWidth * 0.350f, z, 0.0160f, TextAlignmentOptions.Center, Palette.BoardNumberText);
+
+        Transform defenseBadge = CreateGroup(statsGroup, "DefenseValue");
+        template.defenseLabel = CreateText(defenseBadge, "DefenseNumber", "6", CardWidth * 0.350f, z, 0.0160f, TextAlignmentOptions.Center, Palette.BoardNumberText);
     }
 
     private static void AddStatCluster(Transform statsGroup, CardPrefabTemplate template, float z, float y)
@@ -190,10 +378,6 @@ public static class CardPrefabBuilder
         Transform attackBadge = CreateGroup(statsGroup, "AttackBadge");
         AddPanel(attackBadge, "Backing", -CardWidth * 0.285f, z, 0.165f, 0.165f, y, 0.022f, Palette.AttackBadge);
         template.attackLabel = CreateText(attackBadge, "AttackNumber", "3", -CardWidth * 0.285f, z, 0.010f, TextAlignmentOptions.Center, Palette.NumberText);
-
-        Transform operationBadge = CreateGroup(statsGroup, "OperationBadge");
-        template.operationBadgeRenderer = AddPanel(operationBadge, "Backing", 0f, z, 0.170f, 0.165f, y + 0.001f, 0.022f, Palette.OperationBadge);
-        template.operationLabel = CreateText(operationBadge, "OperationNumber", "2", 0f, z, 0.009f, TextAlignmentOptions.Center, Palette.NumberText);
 
         Transform defenseBadge = CreateGroup(statsGroup, "DefenseBadge");
         AddPanel(defenseBadge, "Backing", CardWidth * 0.285f, z, 0.165f, 0.165f, y, 0.022f, Palette.DefenseBadge);
@@ -236,19 +420,244 @@ public static class CardPrefabBuilder
         return frame;
     }
 
+    private static MeshRenderer[] CreateSquareFrame(Transform parent, string prefix, Color color)
+    {
+        MeshRenderer top = AddPanel(parent, $"{prefix}_Top", 0f, CardWidth * 0.510f, CardWidth * 1.035f, 0.020f, 0.090f, 0.010f, color);
+        MeshRenderer bottom = AddPanel(parent, $"{prefix}_Bottom", 0f, -CardWidth * 0.510f, CardWidth * 1.035f, 0.020f, 0.090f, 0.010f, color);
+        MeshRenderer left = AddPanel(parent, $"{prefix}_Left", -CardWidth * 0.510f, 0f, 0.020f, CardWidth * 1.035f, 0.090f, 0.010f, color);
+        MeshRenderer right = AddPanel(parent, $"{prefix}_Right", CardWidth * 0.510f, 0f, 0.020f, CardWidth * 1.035f, 0.090f, 0.010f, color);
+        MeshRenderer[] frame = { top, bottom, left, right };
+        foreach (MeshRenderer renderer in frame)
+        {
+            renderer.enabled = false;
+        }
+
+        return frame;
+    }
+
     private static MeshRenderer AddPanel(Transform parent, string name, float x, float z, float width, float height, float y, float thickness, Color color)
     {
-        GameObject obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        GameObject obj = new GameObject(name);
         obj.name = name;
         obj.transform.SetParent(parent, false);
         obj.transform.localPosition = new Vector3(x, y, z);
-        obj.transform.localScale = new Vector3(width, thickness, height);
-        Object.DestroyImmediate(obj.GetComponent<Collider>());
-        MeshRenderer renderer = obj.GetComponent<MeshRenderer>();
+        obj.transform.localScale = Vector3.one;
+
+        MeshFilter filter = obj.AddComponent<MeshFilter>();
+        filter.sharedMesh = TexturedQuadMeshFor(name, width, height, 1f);
+
+        MeshRenderer renderer = obj.AddComponent<MeshRenderer>();
         renderer.sharedMaterial = MaterialFor(name, color);
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         renderer.receiveShadows = false;
         return renderer;
+    }
+
+    private static MeshRenderer AddTexturedPanel(Transform parent, string name, float x, float z, float width, float height, float y, float thickness, Color color, Texture2D texture, bool blurred)
+    {
+        if (texture == null)
+        {
+            return AddPanel(parent, name, x, z, width, height, y, thickness, color);
+        }
+
+        GameObject obj = new GameObject(name);
+        obj.transform.SetParent(parent, false);
+        obj.transform.localPosition = new Vector3(x, y, z);
+        obj.transform.localScale = Vector3.one;
+
+        MeshFilter filter = obj.AddComponent<MeshFilter>();
+        filter.sharedMesh = TexturedQuadMeshFor(name, width, height, texture.width / (float)texture.height);
+
+        MeshRenderer renderer = obj.AddComponent<MeshRenderer>();
+        renderer.sharedMaterial = MaterialForTexture(name, color, texture, blurred);
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        return renderer;
+    }
+
+    private static MeshRenderer AddEllipsePanel(Transform parent, string name, float x, float z, float radiusX, float radiusZ, float y, Color color)
+    {
+        GameObject obj = new GameObject(name);
+        obj.transform.SetParent(parent, false);
+        obj.transform.localPosition = new Vector3(x, y, z);
+
+        MeshFilter filter = obj.AddComponent<MeshFilter>();
+        filter.sharedMesh = EllipseMeshFor(name, radiusX, radiusZ);
+
+        MeshRenderer renderer = obj.AddComponent<MeshRenderer>();
+        renderer.sharedMaterial = MaterialFor(name, color);
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        return renderer;
+    }
+
+    private static MeshRenderer AddArcPanel(Transform parent, string name, float x, float z, float radiusX, float radiusZ, float startDegrees, float endDegrees, float y, Color color)
+    {
+        GameObject obj = new GameObject(name);
+        obj.transform.SetParent(parent, false);
+        obj.transform.localPosition = new Vector3(x, y, z);
+
+        MeshFilter filter = obj.AddComponent<MeshFilter>();
+        filter.sharedMesh = ArcMeshFor(name, radiusX, radiusZ, startDegrees, endDegrees);
+
+        MeshRenderer renderer = obj.AddComponent<MeshRenderer>();
+        renderer.sharedMaterial = MaterialFor(name, color);
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        return renderer;
+    }
+
+    private static Mesh EllipseMeshFor(string name, float radiusX, float radiusZ)
+    {
+        const int segments = 48;
+        string meshName = $"{SanitizeFileName(name)}_{Mathf.RoundToInt(radiusX * 10000f)}_{Mathf.RoundToInt(radiusZ * 10000f)}";
+        string path = $"{MeshDirectory}/{meshName}.asset";
+        Mesh mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+        if (mesh == null)
+        {
+            Directory.CreateDirectory(MeshDirectory);
+            mesh = new Mesh { name = meshName };
+            AssetDatabase.CreateAsset(mesh, path);
+        }
+
+        Vector3[] vertices = new Vector3[segments + 1];
+        int[] triangles = new int[segments * 3];
+        vertices[0] = Vector3.zero;
+        for (int i = 0; i < segments; i++)
+        {
+            float angle = Mathf.PI * 2f * i / segments;
+            vertices[i + 1] = new Vector3(Mathf.Cos(angle) * radiusX, 0f, Mathf.Sin(angle) * radiusZ);
+        }
+
+        for (int i = 0; i < segments; i++)
+        {
+            int triangleIndex = i * 3;
+            int next = i == segments - 1 ? 1 : i + 2;
+            int current = i + 1;
+            triangles[triangleIndex] = 0;
+            triangles[triangleIndex + 1] = next;
+            triangles[triangleIndex + 2] = current;
+        }
+
+        mesh.Clear();
+        mesh.vertices = vertices;
+        mesh.triangles = triangles;
+        mesh.normals = UpNormals(vertices.Length);
+        mesh.RecalculateBounds();
+        EditorUtility.SetDirty(mesh);
+        AssetDatabase.SaveAssets();
+        return mesh;
+    }
+
+    private static Mesh ArcMeshFor(string name, float radiusX, float radiusZ, float startDegrees, float endDegrees)
+    {
+        const int segments = 24;
+        string meshName = $"{SanitizeFileName(name)}_{Mathf.RoundToInt(radiusX * 10000f)}_{Mathf.RoundToInt(radiusZ * 10000f)}_{Mathf.RoundToInt(startDegrees)}_{Mathf.RoundToInt(endDegrees)}";
+        string path = $"{MeshDirectory}/{meshName}.asset";
+        Mesh mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+        if (mesh == null)
+        {
+            Directory.CreateDirectory(MeshDirectory);
+            mesh = new Mesh { name = meshName };
+            AssetDatabase.CreateAsset(mesh, path);
+        }
+
+        Vector3[] vertices = new Vector3[segments + 2];
+        int[] triangles = new int[segments * 3];
+        vertices[0] = Vector3.zero;
+        for (int i = 0; i <= segments; i++)
+        {
+            float t = i / (float)segments;
+            float angle = Mathf.Deg2Rad * Mathf.Lerp(startDegrees, endDegrees, t);
+            vertices[i + 1] = new Vector3(Mathf.Cos(angle) * radiusX, 0f, Mathf.Sin(angle) * radiusZ);
+        }
+
+        for (int i = 0; i < segments; i++)
+        {
+            int triangleIndex = i * 3;
+            triangles[triangleIndex] = 0;
+            triangles[triangleIndex + 1] = i + 2;
+            triangles[triangleIndex + 2] = i + 1;
+        }
+
+        mesh.Clear();
+        mesh.vertices = vertices;
+        mesh.triangles = triangles;
+        mesh.normals = UpNormals(vertices.Length);
+        mesh.RecalculateBounds();
+        EditorUtility.SetDirty(mesh);
+        AssetDatabase.SaveAssets();
+        return mesh;
+    }
+
+    private static Mesh TexturedQuadMeshFor(string name, float width, float height, float textureAspect)
+    {
+        string meshName = $"{SanitizeFileName(name)}_{Mathf.RoundToInt(width * 10000f)}_{Mathf.RoundToInt(height * 10000f)}_Textured";
+        string path = $"{MeshDirectory}/{meshName}.asset";
+        Mesh mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+        if (mesh == null)
+        {
+            Directory.CreateDirectory(MeshDirectory);
+            mesh = new Mesh { name = meshName };
+            AssetDatabase.CreateAsset(mesh, path);
+        }
+
+        float panelAspect = width / height;
+        Vector2 uvMin = Vector2.zero;
+        Vector2 uvMax = Vector2.one;
+        if (textureAspect > panelAspect)
+        {
+            float visibleWidth = panelAspect / textureAspect;
+            uvMin.x = (1f - visibleWidth) * 0.5f;
+            uvMax.x = 1f - uvMin.x;
+        }
+        else if (textureAspect < panelAspect)
+        {
+            float visibleHeight = textureAspect / panelAspect;
+            uvMin.y = (1f - visibleHeight) * 0.5f;
+            uvMax.y = 1f - uvMin.y;
+        }
+
+        mesh.Clear();
+        mesh.vertices = new[]
+        {
+            new Vector3(-width * 0.5f, 0f, -height * 0.5f),
+            new Vector3(-width * 0.5f, 0f, height * 0.5f),
+            new Vector3(width * 0.5f, 0f, height * 0.5f),
+            new Vector3(width * 0.5f, 0f, -height * 0.5f)
+        };
+        mesh.uv = new[]
+        {
+            new Vector2(uvMin.x, uvMin.y),
+            new Vector2(uvMin.x, uvMax.y),
+            new Vector2(uvMax.x, uvMax.y),
+            new Vector2(uvMax.x, uvMin.y)
+        };
+        mesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
+        mesh.normals = UpNormals(4);
+        mesh.RecalculateBounds();
+        EditorUtility.SetDirty(mesh);
+        AssetDatabase.SaveAssets();
+        return mesh;
+    }
+
+    private static Vector3[] UpNormals(int count)
+    {
+        Vector3[] normals = new Vector3[count];
+        for (int i = 0; i < count; i++)
+        {
+            normals[i] = Vector3.up;
+        }
+
+        return normals;
+    }
+
+    private static float FuelDotX(int index, int count)
+    {
+        int visibleCount = Mathf.Max(1, count);
+        float squeeze = Mathf.InverseLerp(2f, MaxBoardFuelDots, visibleCount);
+        float spacing = Mathf.Lerp(CardWidth * 0.092f, CardWidth * 0.052f, squeeze);
+        return (index - (visibleCount - 1) * 0.5f) * spacing;
     }
 
     private static TMP_Text CreateText(Transform parent, string name, string previewText, float x, float z, float characterSize, TextAlignmentOptions alignment, Color color)
@@ -355,15 +764,20 @@ public static class CardPrefabBuilder
         Material existing = AssetDatabase.LoadAssetAtPath<Material>(path);
         if (existing != null)
         {
+            Shader existingShader = Shader.Find("Unlit/Color");
+            if (existingShader != null)
+            {
+                existing.shader = existingShader;
+            }
             existing.color = color;
             EditorUtility.SetDirty(existing);
             return existing;
         }
 
-        Shader shader = Shader.Find("Standard");
+        Shader shader = Shader.Find("Unlit/Color");
         if (shader == null)
         {
-            shader = Shader.Find("Unlit/Color");
+            shader = Shader.Find("Standard");
         }
 
         Directory.CreateDirectory(MaterialDirectory);
@@ -372,6 +786,171 @@ public static class CardPrefabBuilder
         material.color = color;
         AssetDatabase.CreateAsset(material, path);
         return material;
+    }
+
+    private static Material MaterialForTexture(string name, Color color, Texture2D texture, bool blurred)
+    {
+        string textureKey = texture != null ? SanitizeFileName(texture.name) : "None";
+        string colorKey = ColorUtility.ToHtmlStringRGBA(color);
+        string materialName = $"{SanitizeFileName(name)}_{textureKey}_{colorKey}_{(blurred ? "Blur" : "Crop")}";
+        string path = $"{MaterialDirectory}/{materialName}.mat";
+        Material existing = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (existing != null)
+        {
+            Shader existingShader = Shader.Find("Unlit/Texture");
+            if (existingShader != null)
+            {
+                existing.shader = existingShader;
+            }
+            existing.mainTexture = texture;
+            existing.color = color;
+            EditorUtility.SetDirty(existing);
+            return existing;
+        }
+
+        Shader shader = Shader.Find("Unlit/Texture");
+        if (shader == null)
+        {
+            shader = Shader.Find("Standard");
+        }
+
+        Directory.CreateDirectory(MaterialDirectory);
+        Material material = new Material(shader);
+        material.name = materialName;
+        material.mainTexture = texture;
+        material.color = color;
+        AssetDatabase.CreateAsset(material, path);
+        return material;
+    }
+
+    private static Texture2D ResolveBoardArtTexture()
+    {
+        return ResolveArtTexture(DefaultBoardArtPath);
+    }
+
+    private static Texture2D ResolveArtTexture(string texturePath)
+    {
+        Texture2D texture = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
+        if (texture != null)
+        {
+            EnsureTextureReadable(texturePath);
+        }
+
+        return AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
+    }
+
+    private static Texture2D ResolveBoardBlurTexture()
+    {
+        return ResolveBlurTexture(DefaultBoardArtPath, BoardBlurTexturePath);
+    }
+
+    private static Texture2D ResolveBlurTexture(string sourcePath, string outputPath)
+    {
+        Texture2D existing = AssetDatabase.LoadAssetAtPath<Texture2D>(outputPath);
+        Texture2D source = ResolveArtTexture(sourcePath);
+        if (source == null)
+        {
+            return existing;
+        }
+
+        Texture2D blurred = CreateBlurredTexture(source, 160, 14);
+        Directory.CreateDirectory(MaterialDirectory);
+        File.WriteAllBytes(outputPath, blurred.EncodeToPNG());
+        AssetDatabase.ImportAsset(outputPath, ImportAssetOptions.ForceSynchronousImport);
+        return AssetDatabase.LoadAssetAtPath<Texture2D>(outputPath);
+    }
+
+    private static void ExportRuntimeCardArtResources()
+    {
+        string[] paths = Directory.GetFiles("Assets/Endfield", "*.*", SearchOption.AllDirectories);
+        for (int i = 0; i < paths.Length; i++)
+        {
+            string path = paths[i].Replace('\\', '/');
+            string extension = Path.GetExtension(path).ToLowerInvariant();
+            if (extension != ".png" && extension != ".jpg" && extension != ".jpeg")
+            {
+                continue;
+            }
+
+            Texture2D source = ResolveArtTexture(path);
+            if (source == null)
+            {
+                continue;
+            }
+
+            string key = Path.GetFileNameWithoutExtension(path);
+            string artPath = $"{RuntimeCardArtDirectory}/{key}.png";
+            Texture2D copy = CopyTexture(source);
+            File.WriteAllBytes(artPath, copy.EncodeToPNG());
+            AssetDatabase.ImportAsset(artPath, ImportAssetOptions.ForceSynchronousImport);
+
+            string blurPath = $"{RuntimeCardBlurDirectory}/{key}.png";
+            Texture2D blurred = CreateBlurredTexture(source, 160, 14);
+            File.WriteAllBytes(blurPath, blurred.EncodeToPNG());
+            AssetDatabase.ImportAsset(blurPath, ImportAssetOptions.ForceSynchronousImport);
+        }
+    }
+
+    private static Texture2D CopyTexture(Texture2D source)
+    {
+        Texture2D copy = new Texture2D(source.width, source.height, TextureFormat.RGBA32, false);
+        copy.SetPixels(source.GetPixels());
+        copy.Apply();
+        return copy;
+    }
+
+    private static void EnsureTextureReadable(string path)
+    {
+        TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (importer == null || importer.isReadable)
+        {
+            return;
+        }
+
+        importer.isReadable = true;
+        importer.mipmapEnabled = false;
+        importer.SaveAndReimport();
+    }
+
+    private static Texture2D CreateBlurredTexture(Texture2D source, int size, int radius)
+    {
+        Color[] cropped = new Color[size * size];
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                cropped[y * size + x] = source.GetPixelBilinear(x / (float)(size - 1), y / (float)(size - 1));
+            }
+        }
+
+        Color[] blurred = new Color[cropped.Length];
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                Color sum = Color.clear;
+                float totalWeight = 0f;
+                float sigma = Mathf.Max(1f, radius * 0.55f);
+                for (int oy = -radius; oy <= radius; oy += 2)
+                {
+                    int sy = Mathf.Clamp(y + oy, 0, size - 1);
+                    for (int ox = -radius; ox <= radius; ox += 2)
+                    {
+                        int sx = Mathf.Clamp(x + ox, 0, size - 1);
+                        float weight = Mathf.Exp(-(ox * ox + oy * oy) / (2f * sigma * sigma));
+                        sum += cropped[sy * size + sx] * weight;
+                        totalWeight += weight;
+                    }
+                }
+
+                blurred[y * size + x] = Color.Lerp(sum / Mathf.Max(0.001f, totalWeight), Palette.BoardOuterFrame, 0.22f);
+            }
+        }
+
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        texture.SetPixels(blurred);
+        texture.Apply();
+        return texture;
     }
 
     private static string SanitizeFileName(string value)
@@ -388,7 +967,7 @@ public static class CardPrefabBuilder
     {
         string path = $"{PrefabDirectory}/{fileName}.prefab";
         PrefabUtility.SaveAsPrefabAsset(root, path);
-        Object.DestroyImmediate(root);
+        UnityEngine.Object.DestroyImmediate(root);
     }
 
     private static class Palette
@@ -396,16 +975,23 @@ public static class CardPrefabBuilder
         public static readonly Color UnitPaper = new Color(0.78f, 0.72f, 0.56f);
         public static readonly Color OrderPaper = new Color(0.58f, 0.54f, 0.70f);
         public static readonly Color CounterPaper = new Color(0.56f, 0.39f, 0.58f);
-        public static readonly Color BoardPaper = new Color(0.70f, 0.58f, 0.36f);
+        public static readonly Color BoardPaper = new Color(0.95f, 0.95f, 0.93f);
+        public static readonly Color BoardOuterFrame = new Color(0.84f, 0.84f, 0.82f);
+        public static readonly Color BoardInterior = new Color(0.98f, 0.98f, 0.97f);
+        public static readonly Color BoardArc = new Color(0.74f, 0.74f, 0.72f);
+        public static readonly Color BoardDot = new Color(0.70f, 0.70f, 0.68f);
         public static readonly Color PaperInset = new Color(0.88f, 0.84f, 0.72f);
         public static readonly Color UnitFrame = new Color(0.18f, 0.19f, 0.18f);
         public static readonly Color OrderFrame = new Color(0.22f, 0.20f, 0.32f);
         public static readonly Color CounterFrame = new Color(0.30f, 0.18f, 0.31f);
-        public static readonly Color BoardFrame = new Color(0.48f, 0.31f, 0.12f);
+        public static readonly Color BoardFrame = new Color(0.84f, 0.84f, 0.82f);
         public static readonly Color UnitArt = new Color(0.58f, 0.63f, 0.56f);
         public static readonly Color OrderArt = new Color(0.42f, 0.43f, 0.62f);
         public static readonly Color CounterArt = new Color(0.48f, 0.30f, 0.55f);
         public static readonly Color BoardArt = new Color(0.56f, 0.60f, 0.52f);
+        public static readonly Color BoardArtLight = new Color(0.74f, 0.78f, 0.72f);
+        public static readonly Color BoardArtDark = new Color(0.42f, 0.46f, 0.42f);
+        public static readonly Color BoardKeywordSlot = new Color(0.82f, 0.82f, 0.80f);
         public static readonly Color ArtFrame = new Color(0.83f, 0.70f, 0.36f);
         public static readonly Color RulesPlate = new Color(0.86f, 0.80f, 0.66f);
         public static readonly Color TitlePlate = new Color(0.78f, 0.69f, 0.46f);
@@ -422,5 +1008,6 @@ public static class CardPrefabBuilder
         public static readonly Color BoardTitleText = new Color(1f, 0.92f, 0.62f);
         public static readonly Color RulesText = new Color(0.08f, 0.055f, 0.035f);
         public static readonly Color NumberText = new Color(1f, 0.88f, 0.42f);
+        public static readonly Color BoardNumberText = new Color(0.02f, 0.02f, 0.018f);
     }
 }

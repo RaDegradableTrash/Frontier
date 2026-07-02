@@ -168,7 +168,7 @@ public class SlotVisualize_Temp : MonoBehaviour
         return Color.Lerp(PlayableSceneRules.TabletopColor * 0.72f, color, 0.26f);
     }
 
-    private void DestroyGeneratedObject(Object generatedObject)
+    private void DestroyGeneratedObject(UnityEngine.Object generatedObject)
     {
         if (generatedObject == null)
         {

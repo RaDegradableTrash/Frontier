@@ -16,7 +16,9 @@ public static class UnitActionHighlightRules
         RuntimeCard card,
         int availableKredits)
     {
-        if (card == null || card.Type != CardType.Unit || card.Zone != CardZone.Frontline || card.HasActed || card.HasKeyword(CardKeyword.Pinned) || !KreditRules.CanSpend(availableKredits, card.OperationCost))
+        bool canAttackFromZone = card != null
+            && (card.Zone == CardZone.Frontline || card.Zone == CardZone.PlayerSupport || card.Zone == CardZone.EnemySupport);
+        if (card == null || card.Type != CardType.Unit || !canAttackFromZone || card.HasActed || card.HasKeyword(CardKeyword.Pinned) || !KreditRules.CanSpend(availableKredits, card.OperationCost))
         {
             return false;
         }

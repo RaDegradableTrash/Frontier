@@ -10,7 +10,8 @@ public static class OrderDragRules
         return order.EffectType == CardEffectType.DamageTargetUnit
             || order.EffectType == CardEffectType.PinTargetUnit
             || order.EffectType == CardEffectType.BuffFriendlyUnit
-            || order.EffectType == CardEffectType.DamageTargetUnitAndAdjacent;
+            || order.EffectType == CardEffectType.DamageTargetUnitAndAdjacent
+            || order.EffectType == CardEffectType.DeployWithBlitz;
     }
 
     public static bool ShouldFollowPointer(RuntimeCard order)

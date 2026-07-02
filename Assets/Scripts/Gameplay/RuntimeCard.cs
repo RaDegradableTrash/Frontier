@@ -11,6 +11,8 @@ public class RuntimeCard
     public CardType Type;
     public int KreditCost;
     public int OperationCost;
+    public int DeploymentCostBonus;
+    public int OperationCostBonus;
     public int Attack;
     public int Defense;
     public int CurrentDefense;
@@ -19,6 +21,7 @@ public class RuntimeCard
     public CardEffectType EffectType;
     public int EffectAmount;
     public string AddedCardName;
+    public CardRule[] SpecialRules;
     public CardKeyword Keywords;
     public PlayerSide Owner;
     public CardZone Zone;
@@ -29,7 +32,9 @@ public class RuntimeCard
     public bool HasKeyword(CardKeyword keyword) => (Keywords & keyword) == keyword;
     public void AddKeyword(CardKeyword keyword) => Keywords |= keyword;
     public void RemoveKeyword(CardKeyword keyword) => Keywords &= ~keyword;
-    public bool CanOperate(int availableKredits) => Type == CardType.Unit && !HasActed && !HasKeyword(CardKeyword.Pinned) && OperationCost <= availableKredits;
+    public int EffectiveDeploymentCost => Math.Max(0, KreditCost + DeploymentCostBonus);
+    public int EffectiveOperationCost => Math.Max(0, OperationCost + OperationCostBonus);
+    public bool CanOperate(int availableKredits) => Type == CardType.Unit && !HasActed && !HasKeyword(CardKeyword.Pinned) && EffectiveOperationCost <= availableKredits;
 
     public RuntimeCard CloneFor(PlayerSide owner)
     {
@@ -43,6 +48,8 @@ public class RuntimeCard
             Type = Type,
             KreditCost = KreditCost,
             OperationCost = OperationCost,
+            DeploymentCostBonus = DeploymentCostBonus,
+            OperationCostBonus = OperationCostBonus,
             AddedCardName = AddedCardName,
             Attack = Attack,
             Defense = Defense,
@@ -51,6 +58,7 @@ public class RuntimeCard
             Trigger = Trigger,
             EffectType = EffectType,
             EffectAmount = EffectAmount,
+            SpecialRules = SpecialRules,
             Keywords = Keywords,
             Owner = owner,
             Zone = CardZone.Deck,

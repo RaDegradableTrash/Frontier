@@ -4,8 +4,13 @@ using UnityEngine;
 [RequireComponent(typeof(BoxCollider))]
 public class CardView : MonoBehaviour
 {
-    private const float CardWidth = 0.96f;
-    private const float CardHeight = 1.30f;
+    private const float CardHeight = PlayableSceneRules.HandCardHeight;
+    private const float CardWidth = PlayableSceneRules.HandCardWidth;
+    private const bool UsePrefabVisualsInPlayMode = true;
+    private const float DragStartThresholdPixels = 18f;
+    private const float DragStartHoldSeconds = 0.02f;
+    private const float DraggedHandCardMaxPointerOffsetX = 0.56f;
+    private const float DraggedHandCardMaxPointerOffsetZ = 0.34f;
 
     private RuntimeCard card;
     private GameController controller;
@@ -26,17 +31,26 @@ public class CardView : MonoBehaviour
     private MeshRenderer dragShadowRenderer;
     private MeshRenderer costBadgeRenderer;
     private MeshRenderer operationBadgeRenderer;
+    private MeshRenderer primaryArtRenderer;
+    private MeshRenderer blurredFrameRenderer;
+    private MeshRenderer artFrameRenderer;
     private CardMotion motion;
     private bool isHidden;
     private bool isDragging;
     private bool hasLayout;
     private bool isHoldingPlayerHandOpen;
-    private bool orderHoverAboveHand;
     private bool isSelected;
     private bool isHovered;
     private bool interactionEnabled = true;
     private bool dragEnabled = true;
     private Vector3 dragStartPosition;
+    private Vector3 dragPointerOffsetWorld;
+    private Vector3 dragPointerTargetOffsetWorld;
+    private Vector3 dragVisualVelocity;
+    private Vector3 pointerDownScreenPosition;
+    private Vector3 directClickDownScreenPosition;
+    private float pointerDownTime;
+    private bool directClickHadDrag;
     private Color normalColor;
     private GameObject keywordIconColumn;
     private GameObject discardOverlay;
@@ -48,12 +62,16 @@ public class CardView : MonoBehaviour
     private MeshRenderer damagePreviewSkullRenderer;
     private readonly System.Collections.Generic.List<GameObject> keywordIconObjects = new System.Collections.Generic.List<GameObject>();
     private Coroutine keywordBlinkRoutine;
+    private Coroutine costFlashRoutine;
+    private readonly System.Collections.Generic.List<MeshRenderer> boardFuelDotRenderers = new System.Collections.Generic.List<MeshRenderer>();
+    private static readonly RaycastHit[] PointerRaycastHits = new RaycastHit[64];
+    private static int pointerRaycastFrame = -1;
+    private static CardView pointerRaycastNearestCard;
+    private static float pointerRaycastNearestDistance;
 
     public RuntimeCard Card => card;
     public bool IsHidden => isHidden;
     public bool UsesHandPrefab => useHandPrefab;
-    public static int LastDirectMouseDownFrame { get; private set; } = -1;
-    public static int LastDirectMouseUpFrame { get; private set; } = -1;
 
     public void Initialize(RuntimeCard runtimeCard, GameController owner, bool hidden = false)
     {
@@ -79,11 +97,12 @@ public class CardView : MonoBehaviour
 
         ApplyDefaultPresentation();
         bool shouldHideFaceText = isHidden || card.Owner == PlayerSide.Enemy && card.Zone == CardZone.Hand;
+        SetHandDetailPanelsVisible(!IsHandCard());
         label.text = isHidden ? HiddenCardText() : BuildCardText();
-        SetTextVisible(label, !shouldHideFaceText);
+        SetTextVisible(label, !shouldHideFaceText && !IsHandCard());
         if (costLabel != null)
         {
-            costLabel.text = shouldHideFaceText ? string.Empty : $"{card.KreditCost}";
+            costLabel.text = shouldHideFaceText ? string.Empty : DisplayKreditCostText();
             SetTextVisible(costLabel, !shouldHideFaceText);
         }
 
@@ -101,8 +120,8 @@ public class CardView : MonoBehaviour
 
         if (statusLabel != null)
         {
-            statusLabel.text = shouldHideFaceText ? string.Empty : StatusText();
-            SetTextVisible(statusLabel, !shouldHideFaceText && !string.IsNullOrEmpty(statusLabel.text));
+            statusLabel.text = string.Empty;
+            SetTextVisible(statusLabel, false);
         }
 
         if (costBadgeLabel != null)
@@ -146,6 +165,69 @@ public class CardView : MonoBehaviour
         {
             renderer.enabled = visible;
         }
+    }
+
+    private string DisplayKreditCostText()
+    {
+        return controller != null && card != null ? controller.DisplayKreditCostFor(card).ToString() : (card != null ? card.KreditCost.ToString() : string.Empty);
+    }
+
+    private void SetTextPanelVisible(TMP_Text textMesh, bool visible)
+    {
+        if (textMesh == null || textMesh.transform.parent == null)
+        {
+            return;
+        }
+
+        GameObject panel = textMesh.transform.parent.gameObject;
+        if (panel != gameObject && panel.activeSelf != visible)
+        {
+            panel.SetActive(visible);
+        }
+    }
+
+    private void SetHandDetailPanelsVisible(bool visible)
+    {
+        SetTextPanelVisible(label, visible);
+        SetTextPanelVisible(statusLabel, visible);
+    }
+
+    private string DisplayOperationCostText()
+    {
+        return controller != null && card != null ? controller.DisplayOperationCostFor(card).ToString() : (card != null ? card.OperationCost.ToString() : string.Empty);
+    }
+
+    public void FlashCostChange()
+    {
+        if (costFlashRoutine != null)
+        {
+            StopCoroutine(costFlashRoutine);
+        }
+
+        costFlashRoutine = StartCoroutine(FlashCostChangeRoutine());
+    }
+
+    private System.Collections.IEnumerator FlashCostChangeRoutine()
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            SetTextVisible(costLabel, false);
+            SetTextVisible(operationLabel, false);
+            yield return new WaitForSeconds(0.08f);
+            Refresh();
+            if (costLabel != null && !string.IsNullOrEmpty(costLabel.text))
+            {
+                SetTextVisible(costLabel, true);
+            }
+            if (operationLabel != null && !string.IsNullOrEmpty(operationLabel.text))
+            {
+                SetTextVisible(operationLabel, true);
+            }
+            yield return new WaitForSeconds(0.08f);
+        }
+
+        Refresh();
+        costFlashRoutine = null;
     }
 
     private void SetCardFaceTextVisible(bool visible)
@@ -393,6 +475,11 @@ public class CardView : MonoBehaviour
         motion?.SetSelected(false);
     }
 
+    public void PlayMulliganSelectionPulse()
+    {
+        motion?.Pulse();
+    }
+
     public void SetHandPresentation(bool prominent)
     {
         if (card == null)
@@ -400,14 +487,17 @@ public class CardView : MonoBehaviour
             return;
         }
 
+        SetHandDetailPanelsVisible(false);
+
         if (label != null)
         {
             label.text = $"{TypeLabel(card.Type)} {CardTextRules.ShortCardName(card)}";
+            SetTextVisible(label, false);
         }
 
         if (costLabel != null)
         {
-            costLabel.text = $"{card.KreditCost}";
+            costLabel.text = DisplayKreditCostText();
             SetTextVisible(costLabel, true);
         }
 
@@ -443,19 +533,19 @@ public class CardView : MonoBehaviour
 
         if (statusLabel != null)
         {
-            statusLabel.text = BuildHandRulesText();
-            SetTextVisible(statusLabel, !string.IsNullOrEmpty(statusLabel.text));
+            statusLabel.text = string.Empty;
+            SetTextVisible(statusLabel, false);
         }
 
         if (operationLabel != null)
         {
-            operationLabel.text = card.Type == CardType.Unit ? $"{card.OperationCost}" : string.Empty;
+            operationLabel.text = card.Type == CardType.Unit ? DisplayOperationCostText() : string.Empty;
             SetTextVisible(operationLabel, card.Type == CardType.Unit);
         }
 
         if (operationBadgeRenderer != null)
         {
-            operationBadgeRenderer.enabled = false;
+            operationBadgeRenderer.enabled = card.Type == CardType.Unit;
         }
     }
 
@@ -466,21 +556,29 @@ public class CardView : MonoBehaviour
             return;
         }
 
+        SetHandDetailPanelsVisible(false);
+
         if (label != null)
         {
             label.text = $"{TypeLabel(card.Type)} {CardTextRules.ShortCardName(card)}";
+            SetTextVisible(label, false);
         }
 
         if (costLabel != null)
         {
-            costLabel.text = $"{card.KreditCost}";
+            costLabel.text = DisplayKreditCostText();
             SetTextVisible(costLabel, true);
         }
 
         if (operationLabel != null)
         {
-            operationLabel.text = card.Type == CardType.Unit ? $"{card.OperationCost}" : string.Empty;
+            operationLabel.text = card.Type == CardType.Unit ? DisplayOperationCostText() : string.Empty;
             SetTextVisible(operationLabel, card.Type == CardType.Unit);
+        }
+
+        if (operationBadgeRenderer != null)
+        {
+            operationBadgeRenderer.enabled = card.Type == CardType.Unit;
         }
 
         if (attackLabel != null)
@@ -497,8 +595,8 @@ public class CardView : MonoBehaviour
 
         if (statusLabel != null)
         {
-            statusLabel.text = BuildHandRulesText();
-            SetTextVisible(statusLabel, !string.IsNullOrEmpty(statusLabel.text));
+            statusLabel.text = string.Empty;
+            SetTextVisible(statusLabel, false);
         }
     }
 
@@ -509,22 +607,35 @@ public class CardView : MonoBehaviour
             return;
         }
 
+        SetHandDetailPanelsVisible(false);
+
         if (label != null)
         {
-            label.text = BuildKardsDetailText(18, 2);
-            SetTextVisible(label, true);
+            label.text = $"{TypeLabel(card.Type)} {CardTextRules.DisplayCardName(card)}";
+            SetTextVisible(label, false);
         }
 
         if (costLabel != null)
         {
-            costLabel.text = $"{card.KreditCost}";
+            costLabel.text = DisplayKreditCostText();
             SetTextVisible(costLabel, true);
         }
 
         if (operationLabel != null)
         {
-            operationLabel.text = card.Type == CardType.Unit ? $"{card.OperationCost}" : string.Empty;
+            operationLabel.text = card.Type == CardType.Unit ? DisplayOperationCostText() : string.Empty;
             SetTextVisible(operationLabel, card.Type == CardType.Unit);
+        }
+
+        if (operationBadgeRenderer != null)
+        {
+            operationBadgeRenderer.enabled = card.Type == CardType.Unit;
+        }
+
+        if (statusLabel != null)
+        {
+            statusLabel.text = string.Empty;
+            SetTextVisible(statusLabel, false);
         }
 
         if (attackLabel != null)
@@ -540,8 +651,116 @@ public class CardView : MonoBehaviour
         }
     }
 
+    public void SetBoardUnitPresentation()
+    {
+        if (card == null || card.Type != CardType.Unit)
+        {
+            return;
+        }
+
+        if (label != null)
+        {
+            label.text = string.Empty;
+            SetTextVisible(label, false);
+        }
+
+        if (costLabel != null)
+        {
+            costLabel.text = string.Empty;
+            SetTextVisible(costLabel, false);
+        }
+
+        if (statusLabel != null)
+        {
+            statusLabel.text = string.Empty;
+            SetTextVisible(statusLabel, false);
+        }
+
+        if (costBadgeLabel != null)
+        {
+            costBadgeLabel.text = string.Empty;
+            SetTextVisible(costBadgeLabel, false);
+        }
+
+        if (attackBadgeLabel != null)
+        {
+            attackBadgeLabel.text = string.Empty;
+            SetTextVisible(attackBadgeLabel, false);
+        }
+
+        if (defenseBadgeLabel != null)
+        {
+            defenseBadgeLabel.text = string.Empty;
+            SetTextVisible(defenseBadgeLabel, false);
+        }
+
+        if (attackLabel != null)
+        {
+            attackLabel.text = card.Attack.ToString();
+            SetTextVisible(attackLabel, true);
+        }
+
+        if (defenseLabel != null)
+        {
+            defenseLabel.text = card.CurrentDefense.ToString();
+            SetTextVisible(defenseLabel, true);
+        }
+
+        if (operationLabel != null)
+        {
+            operationLabel.text = string.Empty;
+            SetTextVisible(operationLabel, false);
+        }
+
+        RefreshBoardFuelDots();
+    }
+
+    private void RefreshBoardFuelDots()
+    {
+        if (card == null || card.Type != CardType.Unit)
+        {
+            return;
+        }
+
+        System.Collections.Generic.List<MeshRenderer> dots = new System.Collections.Generic.List<MeshRenderer>();
+        if (prefabTemplate != null)
+        {
+            MeshRenderer[] allRenderers = prefabTemplate.GetComponentsInChildren<MeshRenderer>(true);
+            for (int i = 0; i < allRenderers.Length; i++)
+            {
+                MeshRenderer renderer = allRenderers[i];
+                if (renderer != null && renderer.name.StartsWith("FuelDot_", System.StringComparison.Ordinal))
+                {
+                    dots.Add(renderer);
+                }
+            }
+        }
+        else
+        {
+            dots.AddRange(boardFuelDotRenderers);
+        }
+
+        dots.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+        int fuelCost = Mathf.Clamp(controller != null ? controller.DisplayOperationCostFor(card) : card.OperationCost, 0, dots.Count);
+        float squeeze = Mathf.InverseLerp(2f, Mathf.Max(2f, dots.Count), fuelCost);
+        float spacing = Mathf.Lerp(0.088f, 0.050f, squeeze);
+        for (int i = 0; i < dots.Count; i++)
+        {
+            bool visible = i < fuelCost;
+            dots[i].enabled = visible;
+            dots[i].gameObject.SetActive(visible);
+            if (visible)
+            {
+                Vector3 localPosition = dots[i].transform.localPosition;
+                localPosition.x = (i - (fuelCost - 1) * 0.5f) * spacing;
+                dots[i].transform.localPosition = localPosition;
+            }
+        }
+    }
+
     private void ApplyDefaultPresentation()
     {
+        ApplyOwnerMetalTint();
     }
 
     public void SetLayout(Vector3 position, Vector3 scale, Quaternion rotation, bool animate)
@@ -574,6 +793,13 @@ public class CardView : MonoBehaviour
         StartCoroutine(RevealDrawnCardAfterFlip());
     }
 
+    public void PlayDrawFlight(Vector3 fromPosition, Vector3 stagedPosition, Vector3 toPosition)
+    {
+        SetCardFaceTextVisible(false);
+        motion?.PlayDrawFlight(fromPosition, stagedPosition, toPosition);
+        StartCoroutine(RevealDrawnCardAfterFlip());
+    }
+
     public void PlayMulliganDiscardFlight(Vector3 fromPosition, Vector3 toPosition)
     {
         motion?.PlayMulliganDiscardFlight(fromPosition, toPosition);
@@ -594,7 +820,6 @@ public class CardView : MonoBehaviour
         bool wasDragging = isDragging;
         isDragging = false;
         isHovered = false;
-        orderHoverAboveHand = false;
         motion?.SetDragging(false);
         motion?.SetHovered(false);
         SetDragShadowVisible(false);
@@ -672,6 +897,17 @@ public class CardView : MonoBehaviour
             return;
         }
 
+        if (active)
+        {
+            isHovered = false;
+            isDragging = false;
+            motion.SetHovered(false);
+            motion.SetDragging(false);
+            SetDragShadowVisible(false);
+            SetHoverFrameVisible(false);
+            motion.ResetBasePosition(transform.position);
+        }
+
         motion.SetBaseScale(active
             ? new Vector3(PlayableSceneRules.CenterInspectScale, 1f, PlayableSceneRules.CenterInspectScale)
             : new Vector3(PlayableSceneRules.HandCardScale, 1f, PlayableSceneRules.HandCardScale));
@@ -733,38 +969,83 @@ public class CardView : MonoBehaviour
         motion?.PlayAttackLunge(target);
     }
 
-    private void Update()
-    {
-        UpdateRaycastHover();
-    }
-
     private void OnMouseDown()
     {
-        LastDirectMouseDownFrame = Time.frameCount;
-        BeginPointerInteraction();
+        directClickDownScreenPosition = Input.mousePosition;
+        directClickHadDrag = false;
     }
 
     private void OnMouseDrag()
     {
-        DragPointerInteraction();
     }
 
     private void OnMouseUp()
     {
-        LastDirectMouseUpFrame = Time.frameCount;
-        EndPointerInteraction();
+    }
+
+    private void OnMouseUpAsButton()
+    {
+        return;
+#pragma warning disable CS0162
+        if (!CanInteract())
+        {
+            return;
+        }
+
+        if (directClickHadDrag || Vector3.Distance(Input.mousePosition, directClickDownScreenPosition) >= DragStartThresholdPixels)
+        {
+            return;
+        }
+
+        if (card == null || card.Owner != PlayerSide.Player || card.Zone != CardZone.Hand)
+        {
+            return;
+        }
+
+        if (controller != null && controller.ShouldRouteCardClickToMulligan(this))
+        {
+            controller?.HandleCardClicked(this);
+            return;
+        }
+
+        controller?.HandleCardInspectRequested(this);
+#pragma warning restore CS0162
     }
 
     public bool BeginPointerInteraction()
+    {
+        return BeginPointerInteraction(Input.mousePosition, Time.time);
+    }
+
+    public bool BeginPointerInteraction(Vector3 initialScreenPosition, float initialTime)
     {
         if (!CanInteract())
         {
             return false;
         }
 
-        HoldPlayerHandOpen(true);
         isDragging = false;
+        directClickHadDrag = false;
         dragStartPosition = transform.position;
+        pointerDownScreenPosition = initialScreenPosition;
+        pointerDownTime = initialTime;
+        dragPointerOffsetWorld = Vector3.zero;
+        dragPointerTargetOffsetWorld = Vector3.zero;
+        dragVisualVelocity = Vector3.zero;
+        if (TryGetPointerWorldPosition(initialScreenPosition, out Vector3 pointerWorldPosition))
+        {
+            dragPointerOffsetWorld = dragStartPosition - pointerWorldPosition;
+            if (card != null && card.Zone == CardZone.Hand)
+            {
+                dragPointerOffsetWorld.y = 0f;
+                dragPointerTargetOffsetWorld = ClampedHandDragPointerOffset(dragPointerOffsetWorld);
+            }
+            else
+            {
+                dragPointerTargetOffsetWorld = dragPointerOffsetWorld;
+            }
+        }
+
         motion?.SetDragging(false);
         return true;
     }
@@ -778,46 +1059,109 @@ public class CardView : MonoBehaviour
 
         if (TryGetPointerWorldPosition(out Vector3 pointerPosition))
         {
+            if (!isDragging
+                && (Vector3.Distance(Input.mousePosition, pointerDownScreenPosition) < DragStartThresholdPixels
+                    || Time.time - pointerDownTime < DragStartHoldSeconds))
+            {
+                return true;
+            }
+
+            bool startingDrag = !isDragging;
             isDragging = true;
-            motion?.SetDragging(true);
+            if (startingDrag)
+            {
+                directClickHadDrag = true;
+                dragVisualVelocity = Vector3.zero;
+                if (card != null && card.Zone == CardZone.Hand)
+                {
+                    dragStartPosition = transform.position;
+                    dragPointerOffsetWorld = dragStartPosition - pointerPosition;
+                    dragPointerOffsetWorld.y = 0f;
+                    dragPointerTargetOffsetWorld = ClampedHandDragPointerOffset(dragPointerOffsetWorld);
+                }
+
+                controller?.HandleCardDragStarted(this);
+            }
+            else
+            {
+                motion?.SetDragging(true);
+            }
             SetDragShadowVisible(card != null && card.Zone == CardZone.Hand);
             if (card != null && card.Zone == CardZone.Hand)
             {
-                transform.rotation = Quaternion.identity;
+                Vector3 handDragPosition = pointerPosition
+                    + dragPointerOffsetWorld
+                    + Vector3.up * PlayableSceneRules.DraggedHandCardLift;
+                Vector3 previousPosition = transform.position;
+                Vector3 visualPosition = startingDrag
+                    ? handDragPosition
+                    : Vector3.SmoothDamp(transform.position, handDragPosition, ref dragVisualVelocity, 0.035f, 60f);
                 if (card.Type == CardType.Order && OrderDragRules.ShouldHoverAboveHand(card))
                 {
-                    orderHoverAboveHand = true;
-                    Vector3 hoverPosition = dragStartPosition
-                        + Vector3.up * PlayableSceneRules.DraggedHandCardLift
-                        + Vector3.forward * 0.55f;
-                    transform.position = hoverPosition;
+                    Vector3 anchoredPosition = dragStartPosition + Vector3.forward * 0.20f + Vector3.up * 0.05f;
+                    transform.position = startingDrag
+                        ? anchoredPosition
+                        : Vector3.SmoothDamp(transform.position, anchoredPosition, ref dragVisualVelocity, 0.030f, 60f);
                     controller?.HandleHandOrderDragPreview(this, pointerPosition);
                 }
                 else if (card.Type == CardType.Order && OrderDragRules.ShouldFollowPointer(card))
                 {
-                    orderHoverAboveHand = false;
-                    transform.position = pointerPosition
-                        + Vector3.up * PlayableSceneRules.DraggedHandCardLift
-                        + Vector3.forward * PlayableSceneRules.DraggedHandCardForwardOffset;
+                    transform.position = visualPosition;
                     controller?.HandleHandOrderDragPreview(this, pointerPosition);
                 }
                 else
                 {
-                    orderHoverAboveHand = false;
-                    transform.position = pointerPosition
-                        + Vector3.up * PlayableSceneRules.DraggedHandCardLift
-                        + Vector3.forward * PlayableSceneRules.DraggedHandCardForwardOffset;
+                    transform.position = visualPosition;
+                }
+
+                Vector3 wobbleDelta = card.Type == CardType.Order && OrderDragRules.ShouldHoverAboveHand(card)
+                    ? pointerPosition - previousPosition
+                    : transform.position - previousPosition;
+                ApplyDragWobble(wobbleDelta);
+
+                if (startingDrag)
+                {
+                    motion?.BeginManualDrag(transform.position);
                 }
             }
             else
             {
                 controller?.HandleBoardCardDragPreview(this, pointerPosition);
+                if (startingDrag)
+                {
+                    motion?.BeginManualDrag(transform.position);
+                }
             }
 
             return true;
         }
 
         return false;
+    }
+
+    private static Vector3 ClampedHandDragPointerOffset(Vector3 offset)
+    {
+        offset.x = Mathf.Clamp(offset.x, -DraggedHandCardMaxPointerOffsetX, DraggedHandCardMaxPointerOffsetX);
+        offset.y = 0f;
+        offset.z = Mathf.Clamp(offset.z, -DraggedHandCardMaxPointerOffsetZ, DraggedHandCardMaxPointerOffsetZ);
+        return offset;
+    }
+
+    private void ApplyDragWobble(Vector3 movementDelta)
+    {
+        float deltaTime = Mathf.Max(Time.deltaTime, 0.0001f);
+        float speed = movementDelta.magnitude / deltaTime;
+        if (speed <= 0.001f)
+        {
+            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.identity, deltaTime * 8f);
+            return;
+        }
+
+        Vector3 localDirection = transform.InverseTransformDirection(movementDelta.normalized);
+        float pitch = Mathf.Clamp(localDirection.z * speed * 10.4976f, -58.32f, 58.32f);
+        float roll = Mathf.Clamp(-localDirection.x * speed * 10.4976f, -69.984f, 69.984f);
+        float yaw = Mathf.Clamp(-localDirection.x * speed * 4.6656f, -34.992f, 34.992f);
+        transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.Euler(pitch, yaw, roll), deltaTime * 12f);
     }
 
     public bool EndPointerInteraction()
@@ -827,17 +1171,22 @@ public class CardView : MonoBehaviour
             return false;
         }
 
-        if (!isDragging)
+        bool releasedAsClick = Vector3.Distance(Input.mousePosition, pointerDownScreenPosition) < DragStartThresholdPixels;
+        if (!isDragging || releasedAsClick)
         {
-            controller?.HandleCardClicked(this);
+            isDragging = false;
+            motion?.SetDragging(false);
+            SetDragShadowVisible(false);
+            transform.rotation = Quaternion.identity;
             HoldPlayerHandOpen(false);
             return true;
         }
 
         isDragging = false;
-        orderHoverAboveHand = false;
+        dragVisualVelocity = Vector3.zero;
         motion?.SetDragging(false);
         SetDragShadowVisible(false);
+        transform.rotation = Quaternion.identity;
         Vector3 releasePosition = transform.position;
         if (card != null && card.Zone == CardZone.Hand)
         {
@@ -875,13 +1224,8 @@ public class CardView : MonoBehaviour
     {
     }
 
-    private void UpdateRaycastHover()
+    public void SetPointerHovered(bool hoveredNow)
     {
-        Camera mainCamera = Camera.main;
-        bool hoveredNow = CanInteract()
-            && !isDragging
-            && TryPointerRaycastDistance(mainCamera, Input.mousePosition, out _);
-
         if (hoveredNow == isHovered)
         {
             return;
@@ -890,16 +1234,13 @@ public class CardView : MonoBehaviour
         isHovered = hoveredNow;
         SetHoverFrameVisible(hoveredNow);
         motion?.SetHovered(hoveredNow);
-
         if (hoveredNow)
         {
             HoldPlayerHandOpen(true);
-            controller?.HandleCardHovered(this);
         }
         else if (CardInteractionRules.ShouldReleasePlayerHandHold(isDragging) && !isSelected)
         {
             HoldPlayerHandOpen(false);
-            controller?.HandleCardHoverEnded(this);
         }
     }
 
@@ -953,6 +1294,60 @@ public class CardView : MonoBehaviour
         return TryPointerRaycastDistance(mainCamera, Input.mousePosition, out distance);
     }
 
+    public bool TryPointerProjectedDistance(Camera mainCamera, Vector3 screenPointer, out float distance)
+    {
+        distance = float.MaxValue;
+        if (!CanInteract() || mainCamera == null)
+        {
+            return false;
+        }
+
+        if (screenPointer.x < 0f || screenPointer.x > Screen.width || screenPointer.y < 0f || screenPointer.y > Screen.height)
+        {
+            return false;
+        }
+
+        float cardWidth = CardWidth * Mathf.Abs(transform.lossyScale.x);
+        float cardHeight = (IsBoardUnitCard() ? CardWidth : CardHeight) * Mathf.Abs(transform.lossyScale.z);
+        Vector3 right = transform.right * (cardWidth * 0.5f);
+        Vector3 forward = transform.forward * (cardHeight * 0.5f);
+        Vector3[] corners =
+        {
+            mainCamera.WorldToScreenPoint(transform.position - right - forward),
+            mainCamera.WorldToScreenPoint(transform.position - right + forward),
+            mainCamera.WorldToScreenPoint(transform.position + right - forward),
+            mainCamera.WorldToScreenPoint(transform.position + right + forward),
+        };
+
+        float minX = float.MaxValue;
+        float maxX = float.MinValue;
+        float minY = float.MaxValue;
+        float maxY = float.MinValue;
+        for (int i = 0; i < corners.Length; i++)
+        {
+            if (corners[i].z < 0f)
+            {
+                return false;
+            }
+
+            minX = Mathf.Min(minX, corners[i].x);
+            maxX = Mathf.Max(maxX, corners[i].x);
+            minY = Mathf.Min(minY, corners[i].y);
+            maxY = Mathf.Max(maxY, corners[i].y);
+        }
+
+        const float pointerPaddingPixels = 12f;
+        if (screenPointer.x < minX - pointerPaddingPixels || screenPointer.x > maxX + pointerPaddingPixels
+            || screenPointer.y < minY - pointerPaddingPixels || screenPointer.y > maxY + pointerPaddingPixels)
+        {
+            return false;
+        }
+
+        Vector3 centerScreen = mainCamera.WorldToScreenPoint(transform.position);
+        distance = Vector2.Distance(new Vector2(screenPointer.x, screenPointer.y), new Vector2(centerScreen.x, centerScreen.y));
+        return true;
+    }
+
     public bool TryPointerRaycastDistance(Camera mainCamera, Vector3 screenPointer, out float distance)
     {
         distance = float.MaxValue;
@@ -966,40 +1361,68 @@ public class CardView : MonoBehaviour
             return false;
         }
 
-        Ray ray = mainCamera.ScreenPointToRay(screenPointer);
-        RaycastHit[] hits = Physics.RaycastAll(ray, 100f);
-        if (hits == null || hits.Length == 0)
+        UpdatePointerRaycastCache(mainCamera, screenPointer);
+        if (pointerRaycastNearestCard != this)
         {
             return false;
         }
 
-        float nearestCardDistance = float.MaxValue;
-        CardView nearestCard = null;
-        foreach (RaycastHit hit in hits)
+        distance = pointerRaycastNearestDistance;
+        return true;
+    }
+
+    public static CardView RaycastPointerCard(Camera mainCamera, Vector3 screenPointer)
+    {
+        if (mainCamera == null)
         {
+            return null;
+        }
+
+        if (screenPointer.x < 0f || screenPointer.x > Screen.width || screenPointer.y < 0f || screenPointer.y > Screen.height)
+        {
+            return null;
+        }
+
+        UpdatePointerRaycastCache(mainCamera, screenPointer);
+        return pointerRaycastNearestCard;
+    }
+
+    private static void UpdatePointerRaycastCache(Camera mainCamera, Vector3 screenPointer)
+    {
+        if (pointerRaycastFrame == Time.frameCount)
+        {
+            return;
+        }
+
+        pointerRaycastFrame = Time.frameCount;
+        pointerRaycastNearestCard = null;
+        pointerRaycastNearestDistance = float.MaxValue;
+
+        Ray ray = mainCamera.ScreenPointToRay(screenPointer);
+        int hitCount = Physics.RaycastNonAlloc(ray, PointerRaycastHits, 100f);
+        for (int i = 0; i < hitCount; i++)
+        {
+            RaycastHit hit = PointerRaycastHits[i];
             CardView hitView = hit.collider != null ? hit.collider.GetComponentInParent<CardView>() : null;
             if (hitView == null || !hitView.CanInteract())
             {
                 continue;
             }
 
-            if (hit.distance < nearestCardDistance)
+            if (hit.distance < pointerRaycastNearestDistance)
             {
-                nearestCardDistance = hit.distance;
-                nearestCard = hitView;
+                pointerRaycastNearestDistance = hit.distance;
+                pointerRaycastNearestCard = hitView;
             }
         }
-
-        if (nearestCard != this)
-        {
-            return false;
-        }
-
-        distance = nearestCardDistance;
-        return true;
     }
 
     private bool TryGetPointerWorldPosition(out Vector3 worldPosition)
+    {
+        return TryGetPointerWorldPosition(Input.mousePosition, out worldPosition);
+    }
+
+    private bool TryGetPointerWorldPosition(Vector3 screenPointer, out Vector3 worldPosition)
     {
         worldPosition = transform.position;
         Camera mainCamera = Camera.main;
@@ -1008,14 +1431,13 @@ public class CardView : MonoBehaviour
             return false;
         }
 
-        Vector3 pointer = Input.mousePosition;
-        if (pointer.x < 0f || pointer.x > Screen.width || pointer.y < 0f || pointer.y > Screen.height)
+        if (screenPointer.x < 0f || screenPointer.x > Screen.width || screenPointer.y < 0f || screenPointer.y > Screen.height)
         {
             return false;
         }
 
         Plane boardPlane = new Plane(Vector3.up, Vector3.zero);
-        Ray ray = mainCamera.ScreenPointToRay(pointer);
+        Ray ray = mainCamera.ScreenPointToRay(screenPointer);
         if (!boardPlane.Raycast(ray, out float enter))
         {
             return false;
@@ -1028,7 +1450,9 @@ public class CardView : MonoBehaviour
     private void BuildVisuals(bool hidden)
     {
         transform.localScale = Vector3.one;
-        GetComponent<BoxCollider>().size = new Vector3(CardWidth, 0.04f, CardHeight);
+        GetComponent<BoxCollider>().size = IsBoardUnitCard()
+            ? new Vector3(CardWidth, 0.04f, CardWidth)
+            : new Vector3(CardWidth, 0.04f, CardHeight);
 
         if (TryBuildVisualsFromPrefab(hidden))
         {
@@ -1036,66 +1460,15 @@ public class CardView : MonoBehaviour
             return;
         }
 
-        GameObject face = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        face.name = "Face";
-        face.transform.SetParent(transform, false);
-        face.transform.localPosition = Vector3.zero;
-        face.transform.localScale = new Vector3(CardWidth, 0.03f, CardHeight);
-        RuntimeSafeDestroy.Destroy(face.GetComponent<Collider>());
-
-        faceRenderer = face.GetComponent<MeshRenderer>();
-        normalColor = hidden ? new Color(0.15f, 0.18f, 0.25f) : FactionColor(card.Faction);
-        faceRenderer.material = ResolveFaceMaterial(hidden);
-        faceRenderer.material.color = normalColor;
-
-        MeshRenderer cardFrame = CreateInsetPanel("Card Frame", new Vector3(0f, -0.004f, 0f), new Vector3(CardWidth * 1.02f, 0.028f, CardHeight * 1.02f), new Color(0.04f, 0.045f, 0.05f));
-        cardFrame.transform.SetSiblingIndex(0);
-
-        dragShadowRenderer = CreateInsetPanel("Drag Shadow", new Vector3(0.045f, -0.018f, -0.045f), new Vector3(CardWidth * 0.98f, 0.010f, CardHeight * 0.98f), new Color(0f, 0f, 0f, 0.55f));
-        dragShadowRenderer.enabled = false;
-        selectionRenderer = CreateInsetPanel("Selection Glow", new Vector3(0f, 0.049f, 0f), new Vector3(CardWidth * 1.04f, 0.008f, CardHeight * 1.04f), new Color(1f, 1f, 1f, 0.55f));
-        selectionRenderer.enabled = false;
-        selectionFrameRenderers = CreateSelectionFrame();
-        CreateInsetPanel("Art Panel", new Vector3(0f, 0.055f, 0.08f), new Vector3(CardWidth * 0.86f, 0.016f, CardHeight * 0.58f), hidden ? new Color(0.08f, 0.1f, 0.14f) : ArtColor(card));
-        CreateArtTexture(hidden);
-        CreateInsetPanel("Rules Plate", new Vector3(0f, 0.058f, -CardHeight * 0.18f), new Vector3(CardWidth * 0.86f, 0.012f, CardHeight * 0.42f), hidden ? new Color(0.09f, 0.1f, 0.13f) : new Color(0.86f, 0.80f, 0.66f));
-        costBadgeRenderer = CreateInsetPanel("Cost Badge", new Vector3(-CardWidth * 0.39f, 0.066f, CardHeight * 0.43f), new Vector3(0.23f, 0.025f, 0.23f), new Color(0.08f, 0.075f, 0.045f));
-        operationBadgeRenderer = CreateInsetPanel("Operation Badge", new Vector3(CardWidth * 0.39f, 0.067f, CardHeight * 0.43f), new Vector3(0.21f, 0.025f, 0.21f), new Color(0.12f, 0.11f, 0.08f));
-        operationBadgeRenderer.enabled = false;
-        if (!hidden && card.Type == CardType.Unit)
+        if (IsBoardUnitCard())
         {
-            CreateInsetPanel("Attack Badge", new Vector3(-CardWidth * 0.30f, 0.066f, -CardHeight * 0.43f), new Vector3(0.24f, 0.025f, 0.23f), new Color(0.58f, 0.08f, 0.06f));
-            CreateInsetPanel("Defense Badge", new Vector3(CardWidth * 0.30f, 0.066f, -CardHeight * 0.43f), new Vector3(0.24f, 0.025f, 0.23f), new Color(0.06f, 0.22f, 0.58f));
+            BuildRuntimeBoardCard(hidden);
+        }
+        else
+        {
+            BuildRuntimeHandCard(hidden);
         }
 
-        GameObject rarityBand = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        rarityBand.name = "RarityBand";
-        rarityBand.transform.SetParent(transform, false);
-        rarityBand.transform.localPosition = new Vector3(0f, 0.052f, CardHeight * 0.45f);
-        rarityBand.transform.localScale = new Vector3(CardWidth * 0.92f, 0.012f, 0.055f);
-        RuntimeSafeDestroy.Destroy(rarityBand.GetComponent<Collider>());
-        rarityBandRenderer = rarityBand.GetComponent<MeshRenderer>();
-        rarityBandRenderer.material = CreateRuntimeColorMaterial(hidden ? new Color(0.35f, 0.38f, 0.46f) : RarityColor(card.Rarity));
-
-        GameObject text = new GameObject("Label");
-        text.transform.SetParent(transform, false);
-        text.transform.localPosition = new Vector3(-CardWidth * 0.40f, 0.084f, CardHeight * 0.28f);
-        text.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        label = text.AddComponent<TextMeshPro>();
-        ConfigureTmpText(label, 0.030f, TextAnchor.UpperLeft);
-        label.color = hidden ? Color.white : new Color(0.04f, 0.035f, 0.025f);
-        costLabel = CreateCardText("Cost Number", new Vector3(-CardWidth * 0.39f, 0.094f, CardHeight * 0.43f), 0.105f, TextAnchor.MiddleCenter, new Color(1f, 0.88f, 0.42f));
-        operationLabel = CreateCardText("Operation Number", new Vector3(CardWidth * 0.39f, 0.095f, CardHeight * 0.43f), 0.080f, TextAnchor.MiddleCenter, new Color(1f, 0.88f, 0.38f));
-        attackLabel = CreateCardText("Attack Number", new Vector3(-CardWidth * 0.30f, 0.094f, -CardHeight * 0.43f), 0.105f, TextAnchor.MiddleCenter, new Color(1f, 0.86f, 0.45f));
-        defenseLabel = CreateCardText("Defense Number", new Vector3(CardWidth * 0.30f, 0.094f, -CardHeight * 0.43f), 0.105f, TextAnchor.MiddleCenter, new Color(1f, 0.86f, 0.45f));
-        costBadgeLabel = CreateCardText("Cost Badge Label", new Vector3(-CardWidth * 0.39f, 0.097f, CardHeight * 0.28f), 0.024f, TextAnchor.MiddleCenter, new Color(1f, 0.88f, 0.45f));
-        costBadgeLabel.text = string.Empty;
-        attackBadgeLabel = CreateCardText("Attack Badge Label", new Vector3(-CardWidth * 0.30f, 0.097f, -CardHeight * 0.27f), 0.024f, TextAnchor.MiddleCenter, new Color(1f, 0.88f, 0.45f));
-        attackBadgeLabel.text = string.Empty;
-        defenseBadgeLabel = CreateCardText("Defense Badge Label", new Vector3(CardWidth * 0.30f, 0.097f, -CardHeight * 0.27f), 0.024f, TextAnchor.MiddleCenter, new Color(1f, 0.88f, 0.45f));
-        defenseBadgeLabel.text = string.Empty;
-        statusLabel = CreateCardText("Status Label", new Vector3(-CardWidth * 0.38f, 0.096f, -CardHeight * 0.33f), 0.025f, TextAnchor.MiddleLeft, new Color(0.12f, 0.08f, 0.02f));
-        selectionLabel = CreateCardText("Selection Label", new Vector3(0f, 0.112f, CardHeight * 0.02f), 0.012f, TextAnchor.MiddleCenter, new Color(0.08f, 0.055f, 0.015f));
         selectionLabel.text = string.Empty;
         Renderer selectionLabelRenderer = selectionLabel.GetComponent<Renderer>();
         if (selectionLabelRenderer != null)
@@ -1106,8 +1479,134 @@ public class CardView : MonoBehaviour
         motion = gameObject.AddComponent<CardMotion>();
     }
 
+    private void BuildRuntimeHandCard(bool hidden)
+    {
+        Color frameColor = RuntimeFrameColor();
+        Color paperColor = hidden ? new Color(0.20f, 0.22f, 0.26f) : RuntimePaperColor();
+        normalColor = paperColor;
+
+        dragShadowRenderer = CreateInsetPanel("Drag Shadow", new Vector3(0.035f, -0.018f, -0.035f), new Vector3(CardWidth * 1.02f, 0.010f, CardHeight * 1.02f), new Color(0f, 0f, 0f, 0.42f));
+        dragShadowRenderer.enabled = false;
+        CreateInsetPanel("Outer Frame", new Vector3(0f, -0.006f, 0f), new Vector3(CardWidth * 1.02f, 0.018f, CardHeight * 1.02f), frameColor);
+        faceRenderer = CreateInsetPanel("Paper Inset", new Vector3(0f, 0.012f, -0.010f), new Vector3(CardWidth * 0.86f, 0.014f, CardHeight * 0.84f), paperColor);
+        CreateInsetPanel("Inner Border", new Vector3(0f, 0.024f, 0f), new Vector3(CardWidth * 0.91f, 0.010f, CardHeight * 0.92f), frameColor);
+
+        costBadgeRenderer = CreateInsetPanel("Cost Badge", new Vector3(-CardWidth * 0.365f, 0.060f, CardHeight * 0.405f), new Vector3(0.155f, 0.020f, 0.155f), new Color(0.08f, 0.075f, 0.045f));
+        CreateInsetPanel("Title Plate", new Vector3(CardWidth * 0.055f, 0.054f, CardHeight * 0.405f), new Vector3(CardWidth * 0.610f, 0.012f, 0.135f), new Color(0.78f, 0.69f, 0.46f));
+        CreateInsetPanel("Flag Plate", new Vector3(CardWidth * 0.380f, 0.055f, CardHeight * 0.405f), new Vector3(0.135f, 0.012f, 0.135f), frameColor);
+
+        float artHeight = CardHeight * PlayableSceneRules.CardArtPanelHeightRatio;
+        float artWidth = artHeight * PlayableSceneRules.HandCardAspectRatio;
+        float artZ = CardHeight * 0.105f;
+        artFrameRenderer = CreateInsetPanel("Art Frame", new Vector3(0f, 0.038f, artZ), new Vector3(artWidth + 0.055f, 0.010f, artHeight + 0.055f), new Color(0.83f, 0.70f, 0.36f));
+        primaryArtRenderer = CreateImagePanel("Art Panel", new Vector3(0f, 0.052f, artZ), artWidth, artHeight, hidden ? new Color(0.10f, 0.12f, 0.16f) : ArtColor(card));
+        ApplyRuntimeCardArtwork(primaryArtRenderer, hidden);
+
+        CreateInsetPanel("Rules Plate", new Vector3(0f, 0.042f, -CardHeight * 0.285f), new Vector3(CardWidth * 0.805f, 0.012f, CardHeight * 0.205f), new Color(0.86f, 0.80f, 0.66f));
+        rarityBandRenderer = CreateInsetPanel("Rarity Band", new Vector3(0f, 0.052f, -CardHeight * 0.475f), new Vector3(CardWidth * 0.135f, 0.010f, 0.030f), new Color(0.94f, 0.66f, 0.20f));
+
+        if (!hidden && card.Type == CardType.Unit)
+        {
+            CreateInsetPanel("Attack Badge", new Vector3(-CardWidth * 0.285f, 0.052f, -CardHeight * 0.195f), new Vector3(0.165f, 0.022f, 0.165f), new Color(0.55f, 0.08f, 0.06f));
+            operationBadgeRenderer = CreateInsetPanel("Operation Badge", new Vector3(0f, 0.054f, -CardHeight * 0.195f), new Vector3(0.170f, 0.022f, 0.165f), new Color(0.10f, 0.10f, 0.085f));
+            CreateInsetPanel("Defense Badge", new Vector3(CardWidth * 0.285f, 0.052f, -CardHeight * 0.195f), new Vector3(0.165f, 0.022f, 0.165f), new Color(0.06f, 0.18f, 0.50f));
+        }
+        else
+        {
+            operationBadgeRenderer = null;
+        }
+
+        selectionRenderer = CreateInsetPanel("Selection Glow", new Vector3(0f, 0.070f, 0f), new Vector3(CardWidth * 1.04f, 0.008f, CardHeight * 1.04f), new Color(1f, 1f, 1f, 0.45f));
+        selectionRenderer.enabled = false;
+        selectionFrameRenderers = CreateSelectionFrame();
+
+        label = CreateCardText("Title Label", new Vector3(CardWidth * 0.055f, 0.085f, CardHeight * 0.405f), 0.024f, TextAnchor.MiddleCenter, new Color(0.08f, 0.06f, 0.035f));
+        costLabel = CreateCardText("Cost Number", new Vector3(-CardWidth * 0.365f, 0.090f, CardHeight * 0.405f), 0.064f, TextAnchor.MiddleCenter, new Color(1f, 0.88f, 0.42f));
+        operationLabel = CreateCardText("Operation Number", new Vector3(0f, 0.088f, -CardHeight * 0.195f), 0.052f, TextAnchor.MiddleCenter, new Color(1f, 0.88f, 0.42f));
+        attackLabel = CreateCardText("Attack Number", new Vector3(-CardWidth * 0.285f, 0.088f, -CardHeight * 0.195f), 0.058f, TextAnchor.MiddleCenter, new Color(1f, 0.88f, 0.42f));
+        defenseLabel = CreateCardText("Defense Number", new Vector3(CardWidth * 0.285f, 0.088f, -CardHeight * 0.195f), 0.058f, TextAnchor.MiddleCenter, new Color(1f, 0.88f, 0.42f));
+        statusLabel = CreateCardText("Rules Label", new Vector3(0f, 0.080f, -CardHeight * 0.285f), 0.022f, TextAnchor.MiddleCenter, new Color(0.08f, 0.055f, 0.035f));
+        selectionLabel = CreateCardText("Selection Label", new Vector3(0f, 0.112f, 0f), 0.012f, TextAnchor.MiddleCenter, new Color(0.08f, 0.055f, 0.015f));
+    }
+
+    private void BuildRuntimeBoardCard(bool hidden)
+    {
+        float boardSize = CardWidth;
+        Color frame = new Color(0.84f, 0.84f, 0.82f);
+        Color interior = hidden ? new Color(0.20f, 0.22f, 0.26f) : new Color(0.98f, 0.98f, 0.97f);
+        normalColor = interior;
+
+        dragShadowRenderer = CreateInsetPanel("Drag Shadow", new Vector3(0.035f, -0.018f, -0.035f), new Vector3(boardSize * 1.02f, 0.010f, boardSize * 1.02f), new Color(0f, 0f, 0f, 0.42f));
+        dragShadowRenderer.enabled = false;
+        CreateInsetPanel("Outer Frame", new Vector3(0f, 0.020f, 0f), new Vector3(boardSize * 0.985f, 0.010f, boardSize * 0.985f), frame);
+        faceRenderer = CreateInsetPanel("Interior", new Vector3(0f, 0.030f, 0.040f), new Vector3(boardSize * 0.900f, 0.010f, boardSize * 0.860f), interior);
+        primaryArtRenderer = CreateImagePanel("Board Art", new Vector3(0f, 0.046f, boardSize * 0.145f), boardSize * 0.720f, boardSize * 0.720f, hidden ? new Color(0.12f, 0.14f, 0.16f) : new Color(0.98f, 0.98f, 0.97f));
+        ApplyRuntimeCardArtwork(primaryArtRenderer, hidden);
+        CreateArcPanel("Lower Left Arc", new Vector3(-boardSize * 0.455f, 0.058f, -boardSize * 0.455f), boardSize * 0.285f, boardSize * 0.285f, 0f, 90f, frame);
+        CreateArcPanel("Lower Right Arc", new Vector3(boardSize * 0.455f, 0.058f, -boardSize * 0.455f), boardSize * 0.285f, boardSize * 0.285f, 90f, 180f, frame);
+        rarityBandRenderer = CreateInsetPanel("Rarity Band", new Vector3(0f, 0.062f, -boardSize * 0.475f), new Vector3(boardSize * 0.100f, 0.006f, 0.022f), frame);
+
+        boardFuelDotRenderers.Clear();
+        for (int i = 0; i < 8; i++)
+        {
+            MeshRenderer dot = CreateEllipsePanel($"FuelDot_{i}", new Vector3(FuelDotX(i, 2), 0.070f, -boardSize * 0.355f), boardSize * 0.050f, boardSize * 0.050f, new Color(0.70f, 0.70f, 0.68f));
+            dot.enabled = false;
+            boardFuelDotRenderers.Add(dot);
+        }
+
+        selectionRenderer = CreateInsetPanel("Selection Glow", new Vector3(0f, 0.078f, 0f), new Vector3(boardSize * 1.04f, 0.008f, boardSize * 1.04f), new Color(1f, 1f, 1f, 0.45f));
+        selectionRenderer.enabled = false;
+        selectionFrameRenderers = CreateSelectionFrame();
+
+        label = CreateCardText("Title Label", new Vector3(0f, 0.092f, boardSize * 0.405f), 0.018f, TextAnchor.MiddleCenter, new Color(0.08f, 0.06f, 0.035f));
+        costLabel = CreateCardText("Cost Number", new Vector3(0f, 0.092f, boardSize * 0.405f), 0.001f, TextAnchor.MiddleCenter, Color.clear);
+        attackLabel = CreateCardText("Attack Number", new Vector3(-boardSize * 0.350f, 0.096f, -boardSize * 0.380f), 0.075f, TextAnchor.MiddleCenter, new Color(0.02f, 0.02f, 0.018f));
+        operationLabel = CreateCardText("Operation Number", new Vector3(0f, 0.096f, -boardSize * 0.380f), 0.001f, TextAnchor.MiddleCenter, Color.clear);
+        defenseLabel = CreateCardText("Defense Number", new Vector3(boardSize * 0.350f, 0.096f, -boardSize * 0.380f), 0.075f, TextAnchor.MiddleCenter, new Color(0.02f, 0.02f, 0.018f));
+        statusLabel = CreateCardText("Rules Label", new Vector3(0f, 0.092f, -boardSize * 0.050f), 0.001f, TextAnchor.MiddleCenter, Color.clear);
+        selectionLabel = CreateCardText("Selection Label", new Vector3(0f, 0.112f, 0f), 0.012f, TextAnchor.MiddleCenter, new Color(0.08f, 0.055f, 0.015f));
+    }
+
+    private bool IsBoardUnitCard()
+    {
+        return card != null
+            && card.Type == CardType.Unit
+            && !useHandPrefab
+            && (card.Zone == CardZone.PlayerSupport
+                || card.Zone == CardZone.Frontline
+                || card.Zone == CardZone.EnemySupport);
+    }
+
+    private bool IsHandCard()
+    {
+        return card != null && card.Zone == CardZone.Hand;
+    }
+
+    private string BuildDetailRulesText()
+    {
+        if (card == null)
+        {
+            return string.Empty;
+        }
+
+        string keywordLine = KeywordLine(card);
+        string rulesText = WrapText(card.RulesText, 18, 4);
+        if (string.IsNullOrEmpty(keywordLine))
+        {
+            return rulesText;
+        }
+
+        return string.IsNullOrEmpty(rulesText) ? keywordLine : $"{keywordLine}\n{rulesText}";
+    }
+
+
     private bool TryBuildVisualsFromPrefab(bool hidden)
     {
+        if (Application.isPlaying && !UsePrefabVisualsInPlayMode)
+        {
+            return false;
+        }
+
         string resourcePath = CardPrefabResourcePath();
         CardPrefabTemplate prefab = Resources.Load<CardPrefabTemplate>(resourcePath);
         if (prefab == null)
@@ -1119,9 +1618,9 @@ public class CardView : MonoBehaviour
         prefabTemplate.name = "Card Visual";
         prefabTemplate.transform.localPosition = Vector3.zero;
         prefabTemplate.transform.localRotation = Quaternion.identity;
-        prefabTemplate.transform.localScale = Vector3.one;
-        SanitizePrefabMaterials(prefabTemplate);
-        ApplyPrefabTextFont(prefabTemplate);
+        prefabTemplate.transform.localScale = PrefabVisualRootScale();
+        RemoveChildColliders(prefabTemplate.transform);
+        ApplyOwnerMetalTint();
 
         faceRenderer = prefabTemplate.faceRenderer;
         rarityBandRenderer = prefabTemplate.rarityBandRenderer;
@@ -1129,6 +1628,9 @@ public class CardView : MonoBehaviour
         dragShadowRenderer = prefabTemplate.dragShadowRenderer;
         costBadgeRenderer = prefabTemplate.costBadgeRenderer;
         operationBadgeRenderer = prefabTemplate.operationBadgeRenderer;
+        primaryArtRenderer = prefabTemplate.primaryArtRenderer;
+        blurredFrameRenderer = prefabTemplate.blurredFrameRenderer;
+        artFrameRenderer = prefabTemplate.artFrameRenderer;
         selectionFrameRenderers = prefabTemplate.selectionFrameRenderers;
         label = prefabTemplate.titleLabel;
         costLabel = prefabTemplate.costLabel;
@@ -1140,6 +1642,8 @@ public class CardView : MonoBehaviour
         defenseBadgeLabel = prefabTemplate.defenseBadgeLabel;
         statusLabel = prefabTemplate.statusLabel;
         selectionLabel = prefabTemplate.selectionLabel;
+
+        ApplyPrefabRuntimeSizing();
 
         normalColor = hidden ? new Color(0.15f, 0.18f, 0.25f) : FactionColor(card.Faction);
         if (faceRenderer != null && hidden)
@@ -1180,7 +1684,96 @@ public class CardView : MonoBehaviour
             SetTextVisible(selectionLabel, false);
         }
 
+        ApplyPrefabRuntimeVisibility();
+        ApplyCardNameArtwork();
         return true;
+    }
+
+    private void ApplyPrefabRuntimeSizing()
+    {
+        if (prefabTemplate == null)
+        {
+            return;
+        }
+
+        MeshRenderer artRenderer = primaryArtRenderer;
+        if (artRenderer == null)
+        {
+            return;
+        }
+
+        Vector3 artScale = artRenderer.transform.localScale;
+        float targetAspect = IsBoardUnitCard() ? 1f : PlayableSceneRules.HandCardAspectRatio;
+        if (Mathf.Abs(artScale.z) > 0.001f)
+        {
+            float parentAspectScale = Mathf.Abs(artRenderer.transform.lossyScale.x) > 0.001f
+                ? Mathf.Abs(artRenderer.transform.lossyScale.z / artRenderer.transform.lossyScale.x)
+                : 1f;
+            artScale.x = Mathf.Abs(artScale.z) * targetAspect * parentAspectScale * Mathf.Sign(artScale.x == 0f ? 1f : artScale.x);
+            artRenderer.transform.localScale = artScale;
+        }
+    }
+
+    private Vector3 PrefabVisualRootScale()
+    {
+        return Vector3.one;
+    }
+
+    private void ApplyPrefabRuntimeVisibility()
+    {
+        if (prefabTemplate == null)
+        {
+            return;
+        }
+
+        Transform stats = FindChildRecursive(prefabTemplate.transform, "Stats");
+        if (stats != null)
+        {
+            stats.gameObject.SetActive(card != null && card.Type == CardType.Unit);
+        }
+    }
+
+    private static Transform FindChildRecursive(Transform root, string childName)
+    {
+        if (root == null)
+        {
+            return null;
+        }
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform child = root.GetChild(i);
+            if (child.name == childName)
+            {
+                return child;
+            }
+
+            Transform nested = FindChildRecursive(child, childName);
+            if (nested != null)
+            {
+                return nested;
+            }
+        }
+
+        return null;
+    }
+
+    private void RemoveChildColliders(Transform root)
+    {
+        if (root == null)
+        {
+            return;
+        }
+
+        Collider[] childColliders = root.GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < childColliders.Length; i++)
+        {
+            Collider collider = childColliders[i];
+            if (collider != null && collider.transform != transform)
+            {
+                RuntimeSafeDestroy.Destroy(collider);
+            }
+        }
     }
 
     private void SanitizePrefabMaterials(CardPrefabTemplate template)
@@ -1206,7 +1799,12 @@ public class CardView : MonoBehaviour
             Color color = renderer.sharedMaterial != null && renderer.sharedMaterial.HasProperty("_Color")
                 ? renderer.sharedMaterial.color
                 : Color.white;
-            renderer.material = CreateRuntimeColorMaterial(color);
+            Texture texture = renderer.sharedMaterial != null && renderer.sharedMaterial.HasProperty("_MainTex")
+                ? renderer.sharedMaterial.mainTexture
+                : null;
+            renderer.material = texture != null
+                ? CreateRuntimeTextureMaterial(color, texture)
+                : CreateRuntimeColorMaterial(color);
         }
     }
 
@@ -1244,10 +1842,20 @@ public class CardView : MonoBehaviour
 
     private Material CreateRuntimeTextureMaterial(Color color)
     {
-        Shader shader = Shader.Find("Sprites/Default");
+        return CreateRuntimeTextureMaterial(color, null);
+    }
+
+    private Material CreateRuntimeTextureMaterial(Color color, Texture texture)
+    {
+        return CreateRuntimeTextureMaterial(color, texture, 1f);
+    }
+
+    private Material CreateRuntimeTextureMaterial(Color color, Texture texture, float targetAspect)
+    {
+        Shader shader = Shader.Find("Unlit/Texture");
         if (shader == null)
         {
-            shader = Shader.Find("Unlit/Texture");
+            shader = Shader.Find("Sprites/Default");
         }
 
         if (shader == null)
@@ -1257,7 +1865,172 @@ public class CardView : MonoBehaviour
 
         Material material = new Material(shader);
         material.color = color;
+        if (texture != null)
+        {
+            material.mainTexture = texture;
+            texture.wrapMode = TextureWrapMode.Clamp;
+            ApplyCenterCropUv(material, texture, targetAspect);
+        }
         return material;
+    }
+
+    private static void ApplyCenterCropUv(Material material, Texture texture, float targetAspect)
+    {
+        if (material == null || texture == null || targetAspect <= 0.001f || texture.height <= 0)
+        {
+            return;
+        }
+
+        float textureAspect = (float)texture.width / texture.height;
+        Vector2 scale = Vector2.one;
+        Vector2 offset = Vector2.zero;
+        if (textureAspect > targetAspect)
+        {
+            scale.x = targetAspect / textureAspect;
+            offset.x = (1f - scale.x) * 0.5f;
+        }
+        else
+        {
+            scale.y = textureAspect / targetAspect;
+            offset.y = (1f - scale.y) * 0.5f;
+        }
+
+        material.mainTextureScale = scale;
+        material.mainTextureOffset = offset;
+    }
+
+    private void ApplyCardNameArtwork()
+    {
+        if (card == null || prefabTemplate == null || isHidden)
+        {
+            return;
+        }
+
+        string artKey = CardArtworkKey(card.CardName);
+        Texture2D artTexture = Resources.Load<Texture2D>($"CardArt/{artKey}");
+        Texture2D blurTexture = Resources.Load<Texture2D>($"CardArtBlur/{artKey}");
+
+        if (artTexture != null)
+        {
+            ApplyTexture(primaryArtRenderer, artTexture);
+        }
+
+        if (blurTexture != null && !IsBoardUnitCard())
+        {
+            ApplyTexture(blurredFrameRenderer, blurTexture);
+            ApplyTexture(artFrameRenderer, blurTexture);
+        }
+    }
+
+    private void ApplyTexture(MeshRenderer renderer, Texture2D texture)
+    {
+        if (renderer == null || texture == null)
+        {
+            return;
+        }
+
+        Color color = renderer.material != null && renderer.material.HasProperty("_Color")
+            ? renderer.material.color
+            : Color.white;
+        renderer.material = CreateRuntimeTextureMaterial(color, texture, RendererAspect(renderer));
+    }
+
+    private static float RendererAspect(MeshRenderer renderer)
+    {
+        if (renderer == null)
+        {
+            return 1f;
+        }
+
+        Vector3 scale = renderer.transform.localScale;
+        float width = Mathf.Abs(scale.x);
+        float height = Mathf.Abs(scale.z);
+        return height <= 0.001f ? 1f : Mathf.Max(0.001f, width / height);
+    }
+
+    private static string CardArtworkKey(string cardName)
+    {
+        string normalized = NormalizeArtworkKey(cardName);
+        if (normalized.Contains("perlica") || normalized.Contains("佩丽卡"))
+        {
+            return FirstExistingArtworkKey("Perlica", "Mifu");
+        }
+
+        if (normalized.Contains("chenqianyu") || normalized.Contains("陈千语"))
+        {
+            return FirstExistingArtworkKey("ChenQianyu", "Chenqianyu", "Tangtang");
+        }
+
+        if (normalized.Contains("gilberta") || normalized.Contains("洁尔佩塔"))
+        {
+            return FirstExistingArtworkKey("Gilberta", "Zhuangfangyi");
+        }
+
+        if (normalized.Contains("signallost") || normalized.Contains("连接丢失"))
+        {
+            return "Rossi";
+        }
+
+        if (normalized.Contains("omvdijiang") || normalized.Contains("dijiang") || normalized.Contains("帝江号"))
+        {
+            return "Dijiang";
+        }
+
+        if (normalized.Contains("fieldintel"))
+        {
+            return "Lifeng";
+        }
+
+        if (normalized.Contains("airborne") || normalized.Contains("空降"))
+        {
+            return "Lifeng";
+        }
+
+        if (normalized.Contains("trap") || normalized.Contains("诱饵"))
+        {
+            return "Rossi";
+        }
+
+        if (normalized == "m3" || normalized.Contains("m3"))
+        {
+            return "M3";
+        }
+
+        Texture2D exact = Resources.Load<Texture2D>($"CardArt/{cardName}");
+        return exact != null ? cardName : "M3";
+    }
+
+    private static string FirstExistingArtworkKey(params string[] keys)
+    {
+        for (int i = 0; i < keys.Length; i++)
+        {
+            if (Resources.Load<Texture2D>($"CardArt/{keys[i]}") != null)
+            {
+                return keys[i];
+            }
+        }
+
+        return keys.Length > 0 ? keys[keys.Length - 1] : "M3";
+    }
+
+    private static string NormalizeArtworkKey(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        System.Text.StringBuilder builder = new System.Text.StringBuilder(value.Length);
+        for (int i = 0; i < value.Length; i++)
+        {
+            char c = value[i];
+            if (char.IsLetterOrDigit(c) || c > 127)
+            {
+                builder.Append(char.ToLowerInvariant(c));
+            }
+        }
+
+        return builder.ToString();
     }
 
     private string CardPrefabResourcePath()
@@ -1283,6 +2056,132 @@ public class CardView : MonoBehaviour
         return "CardPrefabs/OrderCard_Hand";
     }
 
+    private void ApplyOwnerMetalTint()
+    {
+        if (card == null || isHidden || IsBoardUnitCard())
+        {
+            return;
+        }
+
+        if (prefabTemplate != null)
+        {
+            return;
+        }
+
+        Color faceColor = OwnerMetalColor(card.Owner);
+        Color artColor = Color.Lerp(faceColor, card.Owner == PlayerSide.Enemy ? new Color(0.45f, 0.13f, 0.10f) : new Color(0.68f, 0.70f, 0.66f), 0.45f);
+        if (faceRenderer != null)
+        {
+            faceRenderer.material.color = faceColor;
+        }
+
+        if (prefabTemplate == null)
+        {
+            normalColor = faceColor;
+            return;
+        }
+
+        MeshRenderer[] renderers = prefabTemplate.GetComponentsInChildren<MeshRenderer>(true);
+        foreach (MeshRenderer renderer in renderers)
+        {
+            if (renderer == null || renderer.GetComponent<TMP_Text>() != null || renderer.sharedMaterial == null || !renderer.material.HasProperty("_Color"))
+            {
+                continue;
+            }
+
+            string objectName = renderer.gameObject.name.ToLowerInvariant();
+            if (objectName.Contains("art") || objectName.Contains("panel"))
+            {
+                renderer.material.color = artColor;
+            }
+            else if (objectName.Contains("face") || objectName.Contains("paper") || objectName.Contains("body"))
+            {
+                renderer.material.color = faceColor;
+            }
+        }
+
+        normalColor = faceColor;
+    }
+
+    private Color OwnerMetalColor(PlayerSide owner)
+    {
+        return owner == PlayerSide.Enemy
+            ? new Color(0.50f, 0.24f, 0.22f, 1f)
+            : new Color(0.58f, 0.60f, 0.56f, 1f);
+    }
+
+    private Color RuntimeFrameColor()
+    {
+        if (card == null)
+        {
+            return new Color(0.18f, 0.19f, 0.18f);
+        }
+
+        if (card.Owner == PlayerSide.Enemy)
+        {
+            return new Color(0.42f, 0.15f, 0.13f);
+        }
+
+        switch (card.Type)
+        {
+            case CardType.Order:
+                return new Color(0.22f, 0.20f, 0.32f);
+            case CardType.Countermeasure:
+                return new Color(0.30f, 0.18f, 0.31f);
+            default:
+                return new Color(0.18f, 0.19f, 0.18f);
+        }
+    }
+
+    private Color RuntimePaperColor()
+    {
+        if (card == null)
+        {
+            return new Color(0.78f, 0.72f, 0.56f);
+        }
+
+        Color baseColor;
+        switch (card.Type)
+        {
+            case CardType.Order:
+                baseColor = new Color(0.58f, 0.54f, 0.70f);
+                break;
+            case CardType.Countermeasure:
+                baseColor = new Color(0.56f, 0.39f, 0.58f);
+                break;
+            default:
+                baseColor = new Color(0.78f, 0.72f, 0.56f);
+                break;
+        }
+
+        return card.Owner == PlayerSide.Enemy
+            ? Color.Lerp(baseColor, new Color(0.50f, 0.18f, 0.15f), 0.45f)
+            : baseColor;
+    }
+
+    private void ApplyRuntimeCardArtwork(MeshRenderer renderer, bool hidden)
+    {
+        if (renderer == null || hidden || card == null)
+        {
+            return;
+        }
+
+        string artKey = CardArtworkKey(card.CardName);
+        Texture2D artTexture = Resources.Load<Texture2D>($"CardArt/{artKey}");
+        if (artTexture != null)
+        {
+            ApplyTexture(renderer, artTexture);
+        }
+    }
+
+    private static float FuelDotX(int index, int count)
+    {
+        int visibleCount = Mathf.Max(1, count);
+        float squeeze = Mathf.InverseLerp(2f, 8f, visibleCount);
+        float spacing = Mathf.Lerp(0.088f, 0.050f, squeeze);
+        return (index - (visibleCount - 1) * 0.5f) * spacing;
+    }
+
     private TMP_Text CreateCardText(string textName, Vector3 localPosition, float characterSize, TextAnchor anchor, Color color)
     {
         GameObject textObject = new GameObject(textName);
@@ -1298,7 +2197,7 @@ public class CardView : MonoBehaviour
 
     private static void ConfigureTmpText(TMP_Text text, float characterSize, TextAnchor anchor)
     {
-        text.fontSize = characterSize * 150f;
+        text.fontSize = characterSize * 12f;
         text.alignment = TmpAlignment(anchor);
         text.enableWordWrapping = true;
         text.overflowMode = TextOverflowModes.Overflow;
@@ -1342,6 +2241,138 @@ public class CardView : MonoBehaviour
         MeshRenderer renderer = panel.GetComponent<MeshRenderer>();
         renderer.material = CreateRuntimeColorMaterial(color);
         return renderer;
+    }
+
+    private MeshRenderer CreateImagePanel(string panelName, Vector3 localPosition, float width, float height, Color color)
+    {
+        GameObject panel = new GameObject(panelName);
+        panel.transform.SetParent(transform, false);
+        panel.transform.localPosition = localPosition;
+
+        MeshFilter filter = panel.AddComponent<MeshFilter>();
+        filter.mesh = RuntimeQuadMesh(width, height);
+
+        MeshRenderer renderer = panel.AddComponent<MeshRenderer>();
+        renderer.material = CreateRuntimeTextureMaterial(color);
+        return renderer;
+    }
+
+    private MeshRenderer CreateEllipsePanel(string panelName, Vector3 localPosition, float radiusX, float radiusZ, Color color)
+    {
+        GameObject panel = new GameObject(panelName);
+        panel.transform.SetParent(transform, false);
+        panel.transform.localPosition = localPosition;
+
+        MeshFilter filter = panel.AddComponent<MeshFilter>();
+        filter.mesh = RuntimeEllipseMesh(radiusX, radiusZ);
+
+        MeshRenderer renderer = panel.AddComponent<MeshRenderer>();
+        renderer.material = CreateRuntimeColorMaterial(color);
+        return renderer;
+    }
+
+    private MeshRenderer CreateArcPanel(string panelName, Vector3 localPosition, float radiusX, float radiusZ, float startDegrees, float endDegrees, Color color)
+    {
+        GameObject panel = new GameObject(panelName);
+        panel.transform.SetParent(transform, false);
+        panel.transform.localPosition = localPosition;
+
+        MeshFilter filter = panel.AddComponent<MeshFilter>();
+        filter.mesh = RuntimeArcMesh(radiusX, radiusZ, startDegrees, endDegrees);
+
+        MeshRenderer renderer = panel.AddComponent<MeshRenderer>();
+        renderer.material = CreateRuntimeColorMaterial(color);
+        return renderer;
+    }
+
+    private static Mesh RuntimeQuadMesh(float width, float height)
+    {
+        Mesh mesh = new Mesh { name = "RuntimeCardImageQuad" };
+        mesh.vertices = new[]
+        {
+            new Vector3(-width * 0.5f, 0f, -height * 0.5f),
+            new Vector3(width * 0.5f, 0f, -height * 0.5f),
+            new Vector3(width * 0.5f, 0f, height * 0.5f),
+            new Vector3(-width * 0.5f, 0f, height * 0.5f)
+        };
+        mesh.uv = new[]
+        {
+            new Vector2(0f, 0f),
+            new Vector2(1f, 0f),
+            new Vector2(1f, 1f),
+            new Vector2(0f, 1f)
+        };
+        mesh.triangles = new[] { 0, 2, 1, 0, 3, 2 };
+        mesh.normals = UpNormals(4);
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    private static Mesh RuntimeEllipseMesh(float radiusX, float radiusZ)
+    {
+        const int segments = 24;
+        Mesh mesh = new Mesh { name = "RuntimeCardEllipse" };
+        Vector3[] vertices = new Vector3[segments + 1];
+        int[] triangles = new int[segments * 3];
+        vertices[0] = Vector3.zero;
+        for (int i = 0; i < segments; i++)
+        {
+            float angle = Mathf.PI * 2f * i / segments;
+            vertices[i + 1] = new Vector3(Mathf.Cos(angle) * radiusX, 0f, Mathf.Sin(angle) * radiusZ);
+        }
+
+        for (int i = 0; i < segments; i++)
+        {
+            int next = i == segments - 1 ? 1 : i + 2;
+            triangles[i * 3] = 0;
+            triangles[i * 3 + 1] = i + 1;
+            triangles[i * 3 + 2] = next;
+        }
+
+        mesh.vertices = vertices;
+        mesh.triangles = triangles;
+        mesh.normals = UpNormals(vertices.Length);
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    private static Mesh RuntimeArcMesh(float radiusX, float radiusZ, float startDegrees, float endDegrees)
+    {
+        const int segments = 16;
+        Mesh mesh = new Mesh { name = "RuntimeCardArc" };
+        Vector3[] vertices = new Vector3[segments + 2];
+        int[] triangles = new int[segments * 3];
+        vertices[0] = Vector3.zero;
+        for (int i = 0; i <= segments; i++)
+        {
+            float t = i / (float)segments;
+            float angle = Mathf.Deg2Rad * Mathf.Lerp(startDegrees, endDegrees, t);
+            vertices[i + 1] = new Vector3(Mathf.Cos(angle) * radiusX, 0f, Mathf.Sin(angle) * radiusZ);
+        }
+
+        for (int i = 0; i < segments; i++)
+        {
+            triangles[i * 3] = 0;
+            triangles[i * 3 + 1] = i + 1;
+            triangles[i * 3 + 2] = i + 2;
+        }
+
+        mesh.vertices = vertices;
+        mesh.triangles = triangles;
+        mesh.normals = UpNormals(vertices.Length);
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    private static Vector3[] UpNormals(int count)
+    {
+        Vector3[] normals = new Vector3[count];
+        for (int i = 0; i < count; i++)
+        {
+            normals[i] = Vector3.up;
+        }
+
+        return normals;
     }
 
     private MeshRenderer[] CreateSelectionFrame()
@@ -1545,12 +2576,13 @@ public class CardView : MonoBehaviour
     {
         if (operationLabel != null)
         {
-            operationLabel.text = string.Empty;
+            operationLabel.text = card != null && card.Type == CardType.Unit ? DisplayOperationCostText() : string.Empty;
+            SetTextVisible(operationLabel, card != null && card.Type == CardType.Unit);
         }
 
         if (operationBadgeRenderer != null)
         {
-            operationBadgeRenderer.enabled = false;
+            operationBadgeRenderer.enabled = card != null && card.Type == CardType.Unit;
         }
 
         if (controller == null || isHidden || costLabel == null || costBadgeRenderer == null)
@@ -1559,17 +2591,14 @@ public class CardView : MonoBehaviour
         }
 
         int availableKredits = controller.AvailableKreditsFor(card.Owner);
-        CardOperationBadgeState state = CardOperationBadgeRules.State(card, availableKredits);
+        int operationCost = controller.DisplayOperationCostFor(card);
+        CardOperationBadgeState state = CardOperationBadgeRules.State(card, availableKredits, operationCost);
         if (state == CardOperationBadgeState.Hidden)
         {
             return;
         }
 
-        costLabel.text = CardOperationBadgeRules.Text(card, availableKredits);
-        if (statusLabel != null && string.IsNullOrEmpty(statusLabel.text))
-        {
-            statusLabel.text = OperationStateLabel(state);
-        }
+        costLabel.text = CardOperationBadgeRules.Text(card, availableKredits, operationCost);
     }
 
     private Color OperationBadgeColor(CardOperationBadgeState state)
@@ -1631,19 +2660,7 @@ public class CardView : MonoBehaviour
 
     private Color FactionColor(CardFaction faction)
     {
-        switch (faction)
-        {
-            case CardFaction.USA:
-                return new Color(0.72f, 0.84f, 0.95f);
-            case CardFaction.Germany:
-                return new Color(0.72f, 0.72f, 0.68f);
-            case CardFaction.Soviet:
-                return new Color(0.9f, 0.66f, 0.62f);
-            case CardFaction.Japan:
-                return new Color(0.93f, 0.82f, 0.66f);
-            default:
-                return new Color(0.82f, 0.9f, 0.76f);
-        }
+        return new Color(0.82f, 0.9f, 0.76f);
     }
 
     private Material ResolveFaceMaterial(bool hidden)

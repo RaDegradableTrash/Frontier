@@ -33,10 +33,7 @@ public static class SceneCommandRules
                     || phase == GamePhase.Mulligan;
             case SceneCommandType.StrikeBoard:
                 return phase == GamePhase.PlayerTurn && activeSide == PlayerSide.Player && hasBoard;
-            case SceneCommandType.SelectAlliedTempo:
-            case SceneCommandType.SelectAxisArmor:
-            case SceneCommandType.SelectSovietControl:
-            case SceneCommandType.SelectJapanAmbush:
+            case SceneCommandType.SelectDeck:
                 return phase == GamePhase.DeckBuilder;
             default:
                 return false;
@@ -59,10 +56,7 @@ public static class SceneCommandRules
         {
             case GamePhase.DeckBuilder:
                 return command == SceneCommandType.StartMatch
-                    || command == SceneCommandType.SelectAlliedTempo
-                    || command == SceneCommandType.SelectAxisArmor
-                    || command == SceneCommandType.SelectSovietControl
-                    || command == SceneCommandType.SelectJapanAmbush;
+                    || command == SceneCommandType.SelectDeck;
             case GamePhase.Mulligan:
                 return command == SceneCommandType.KeepHand
                     || command == SceneCommandType.Mulligan

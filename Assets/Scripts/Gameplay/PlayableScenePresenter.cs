@@ -366,8 +366,7 @@ private static bool CanMutateSceneHierarchy
         {
             inspector.transform.position = PlayableSceneRules.CardInspectorPosition;
             inspector.ApplyPresentation();
-            SetRendererVisible(inspector.gameObject, PlayableSceneRules.TabletopInfoPanelsEnabled);
-            ConfigureInfoBacking(CardInspectorBackingName, PlayableSceneRules.CardInspectorPosition, PlayableSceneRules.TabletopInfoPanelsEnabled);
+            ConfigureInfoBacking(CardInspectorBackingName, PlayableSceneRules.CardInspectorPosition, inspector.HasCard);
         }
 
         SceneDeckSummary deckSummary = FindObjectOfType<SceneDeckSummary>();
@@ -490,41 +489,7 @@ private static bool CanMutateSceneHierarchy
 
         backing.transform.position = pile.transform.position;
         Vector2 scale = PlayableSceneRules.PileBadgeScale;
-        if (PlayableSceneRules.PileStackLayerCount <= 0)
-        {
-            for (int i = backing.transform.childCount - 1; i >= 0; i--)
-            {
-                DestroyGeneratedObject(backing.transform.GetChild(i).gameObject);
-            }
-
-            Vector3 baseScale = new Vector3(scale.x, 0.026f, scale.y);
-            MeshRenderer existingRenderer = backing.GetComponent<MeshRenderer>();
-            if (existingRenderer == null)
-            {
-                GameObject baseLayer = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                baseLayer.name = "LayerFlat";
-                baseLayer.transform.SetParent(backing.transform, false);
-                baseLayer.transform.localPosition = new Vector3(0f, -0.108f, 0f);
-                baseLayer.transform.localScale = baseScale;
-                Collider collider = baseLayer.GetComponent<Collider>();
-                if (collider != null)
-                {
-                    DestroyGeneratedObject(collider);
-                }
-
-                existingRenderer = baseLayer.GetComponent<MeshRenderer>();
-            }
-
-            if (existingRenderer != null)
-            {
-                Color color = Color.Lerp(new Color(0.05f, 0.055f, 0.05f), new Color(0.09f, 0.095f, 0.085f), 0.45f);
-                existingRenderer.sharedMaterial = NewSurfaceMaterial(color);
-            }
-
-            return;
-        }
-
-        for (int i = 0; i < PlayableSceneRules.PileStackLayerCount; i++)
+for (int i = 0; i < PlayableSceneRules.PileStackLayerCount; i++)
         {
             Transform layer = backing.transform.Find($"Layer {i}");
             if (layer == null)
@@ -652,17 +617,8 @@ private static bool CanMutateSceneHierarchy
             case SceneCommandType.Mulligan:
                 position = new Vector3(PlayableSceneRules.CommandColumnX, 0.16f, 0.10f);
                 return true;
-            case SceneCommandType.SelectAlliedTempo:
+            case SceneCommandType.SelectDeck:
                 position = new Vector3(-2.55f, 0.16f, PlayableSceneRules.DeckSelectorRowZ);
-                return true;
-            case SceneCommandType.SelectAxisArmor:
-                position = new Vector3(-0.85f, 0.16f, PlayableSceneRules.DeckSelectorRowZ);
-                return true;
-            case SceneCommandType.SelectSovietControl:
-                position = new Vector3(0.85f, 0.16f, PlayableSceneRules.DeckSelectorRowZ);
-                return true;
-            case SceneCommandType.SelectJapanAmbush:
-                position = new Vector3(2.55f, 0.16f, PlayableSceneRules.DeckSelectorRowZ);
                 return true;
             default:
                 position = Vector3.zero;
@@ -721,6 +677,24 @@ private static bool CanMutateSceneHierarchy
             return;
         }
 
+        DeskContourTerrainGenerator terrainGenerator = tabletop.GetComponent<DeskContourTerrainGenerator>();
+        bool generatedTerrainWasAdded = terrainGenerator == null;
+        if (terrainGenerator == null)
+        {
+            terrainGenerator = tabletop.AddComponent<DeskContourTerrainGenerator>();
+        }
+
+        if (terrainGenerator.CurrentContourStyle != DeskContourTerrainGenerator.ContourStyle.ReferenceMatchBackdrop
+            || !terrainGenerator.IsTablePresetApplied
+            || !terrainGenerator.HasGeneratedTexture)
+        {
+            terrainGenerator.ApplyReferenceMatchBackdropPresetReferenceImageMatchTarget();
+        }
+        else
+        {
+            terrainGenerator.ApplyTabletopSciFiPresetIfNeeded();
+        }
+
         Material material = Application.isPlaying ? renderer.material : renderer.sharedMaterial;
         if (material == null)
         {
@@ -728,7 +702,7 @@ private static bool CanMutateSceneHierarchy
             AssignTabletopMaterial(renderer, material);
         }
 
-        if (material.HasProperty(ColorProperty))
+        if (generatedTerrainWasAdded && terrainGenerator != null && !terrainGenerator.HasGeneratedTexture && material.HasProperty(ColorProperty))
         {
             material.color = PlayableSceneRules.TabletopColor;
         }
@@ -777,7 +751,7 @@ private static bool CanMutateSceneHierarchy
         return text.Contains("HQ") || text.Contains("SUPPORT") || text.Contains("FRONTLINE");
     }
 
-    private void DestroyGeneratedObject(Object generatedObject)
+    private void DestroyGeneratedObject(UnityEngine.Object generatedObject)
     {
         if (generatedObject == null)
         {

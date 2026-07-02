@@ -240,7 +240,7 @@ public class SceneCommandButton : MonoBehaviour
         }
     }
 
-    private void DestroyGeneratedObject(Object generatedObject)
+    private void DestroyGeneratedObject(UnityEngine.Object generatedObject)
     {
         if (generatedObject is Collider collider)
         {

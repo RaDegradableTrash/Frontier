@@ -32,7 +32,7 @@ public class SceneCardLayout : MonoBehaviour
         Vector3 anchor = side == PlayerSide.Player
             ? (playerHandRevealed ? playerHandRevealedAnchor : playerHandAnchor)
             : enemyHandAnchor;
-        float spacing = side == PlayerSide.Player && playerHandRevealed ? revealedHandSpacing : handSpacing;
+        float spacing = handSpacing;
         Vector3 position = anchor + Vector3.right * CardLayoutRules.OffsetIndex(index, count) * spacing;
         if (side == PlayerSide.Player)
         {

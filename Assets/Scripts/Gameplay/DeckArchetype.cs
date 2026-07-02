@@ -1,7 +1,4 @@
 public enum DeckArchetype
 {
-    AlliedTempo,
-    AxisArmor,
-    SovietControl,
-    JapaneseAmbush
+    Endfield
 }

@@ -12,24 +12,10 @@ public class SceneDeckSummary : MonoBehaviour
         EnsureTextMesh();
     }
 
-    public void UpdateSummary(
-        string deckName,
-        string description,
-        int slot,
-        bool usingCustomDeck,
-        int customDeckSize,
-        bool customDeckValid,
-        int minimumDeckSize)
+    public void UpdateSummary(string deckName, string description)
     {
         EnsureTextMesh();
-        textMesh.text = DeckSummaryTextRules.BuildSummary(
-            deckName,
-            description,
-            slot,
-            usingCustomDeck,
-            customDeckSize,
-            customDeckValid,
-            minimumDeckSize);
+        textMesh.text = DeckSummaryTextRules.BuildSummary(deckName, description);
     }
 
     public void Clear()

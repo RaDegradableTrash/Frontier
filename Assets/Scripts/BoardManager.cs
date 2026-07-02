@@ -615,7 +615,7 @@ public class BoardManager : MonoBehaviour
         CreateLaneLabel(labelText, localPosition + new Vector3(-0.62f, 0.08f, 0.02f), Color.white);
     }
 
-    private void DestroyGeneratedObject(Object generatedObject)
+    private void DestroyGeneratedObject(UnityEngine.Object generatedObject)
     {
         if (generatedObject == null)
         {
