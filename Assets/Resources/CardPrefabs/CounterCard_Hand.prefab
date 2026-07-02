@@ -8,10 +8,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 575940809787310538, guid: 9af563f7c0e934bb685eae277ee3bfc0, type: 3}
-      propertyPath: m_text
-      value: COUNTER
-      objectReference: {fileID: 0}
     - target: {fileID: 2879191809746221718, guid: 9af563f7c0e934bb685eae277ee3bfc0, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -55,10 +51,6 @@ PrefabInstance:
     - target: {fileID: 6296563534329473621, guid: 9af563f7c0e934bb685eae277ee3bfc0, type: 3}
       propertyPath: m_Name
       value: CounterCard_Hand
-      objectReference: {fileID: 0}
-    - target: {fileID: 7820796472298193378, guid: 9af563f7c0e934bb685eae277ee3bfc0, type: 3}
-      propertyPath: m_IsActive
-      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -583,12 +583,16 @@ public partial class GameController
         return result;
     }
 
-    private System.Collections.IEnumerator ShowTriggeredCountermeasure(RuntimeCard countermeasure)
-    {
-        CardView displayView = CreateTransientCardView(countermeasure);
-        Vector3 start = CountermeasurePosition(countermeasure.Owner, 0, 1, countermeasure.Owner == PlayerSide.Player ? -4.15f : 4.15f);
-        Vector3 hold = new Vector3(-4.85f, PlayableSceneRules.OrderDisplayAnchor.y, countermeasure.Owner == PlayerSide.Player ? -1.35f : 1.35f);
-        displayView.SetLayout(start, new Vector3(PlayableSceneRules.OrderDisplayScale * 0.78f, 1f, PlayableSceneRules.OrderDisplayScale * 0.78f), Quaternion.identity, false);
+        private System.Collections.IEnumerator ShowTriggeredCountermeasure(RuntimeCard countermeasure)
+        {
+            CardView displayView = CreateTransientCardView(countermeasure);
+            if (displayView == null)
+            {
+                yield break;
+            }
+            Vector3 start = CountermeasurePosition(countermeasure.Owner, 0, 1, countermeasure.Owner == PlayerSide.Player ? -4.15f : 4.15f);
+            Vector3 hold = new Vector3(-4.85f, PlayableSceneRules.OrderDisplayAnchor.y, countermeasure.Owner == PlayerSide.Player ? -1.35f : 1.35f);
+            displayView.SetLayout(start, new Vector3(PlayableSceneRules.OrderDisplayScale * 0.78f, 1f, PlayableSceneRules.OrderDisplayScale * 0.78f), Quaternion.identity, false);
         yield return new WaitForSeconds(0.02f);
         displayView.SetLayout(hold, new Vector3(PlayableSceneRules.OrderDisplayScale * 0.78f, 1f, PlayableSceneRules.OrderDisplayScale * 0.78f), Quaternion.identity, true);
         yield return new WaitForSeconds(0.72f);

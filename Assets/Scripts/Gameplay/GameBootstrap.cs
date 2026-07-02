@@ -33,7 +33,32 @@ public class GameBootstrap : MonoBehaviour
         camera.transform.position = new Vector3(0f, 6.8f, -6.2f);
         camera.transform.rotation = Quaternion.Euler(55f, 0f, 0f);
         camera.fieldOfView = 42f;
-        camera.clearFlags = CameraClearFlags.Skybox;
+        camera.clearFlags = CameraClearFlags.SolidColor;
+        camera.backgroundColor = new Color(0.024f, 0.028f, 0.046f, 1f);
+        if (RenderSettings.skybox == null)
+        {
+            Material darkSkybox = new Material(Shader.Find("Skybox/6 Sided"));
+            if (darkSkybox.HasProperty("_Tint"))
+            {
+                darkSkybox.SetColor("_Tint", new Color(0.018f, 0.022f, 0.036f, 1f));
+            }
+
+            if (darkSkybox.HasProperty("_Exposure"))
+            {
+                darkSkybox.SetFloat("_Exposure", 0.45f);
+            }
+
+            RenderSettings.skybox = darkSkybox;
+        }
+
+        if (RenderSettings.skybox != null && RenderSettings.skybox.HasProperty("_Tint"))
+        {
+            RenderSettings.skybox.SetColor("_Tint", new Color(0.02f, 0.025f, 0.035f, 1f));
+        }
+
+        RenderSettings.ambientSkyColor = new Color(0.018f, 0.022f, 0.03f, 1f);
+        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+        RenderSettings.ambientLight = new Color(0.08f, 0.086f, 0.11f, 1f);
 
         if (camera.GetComponent<CameraInteraction>() == null)
         {

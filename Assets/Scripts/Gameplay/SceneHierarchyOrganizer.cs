@@ -60,7 +60,7 @@ public static class SceneHierarchyOrganizer
             return;
         }
 
-        if (isOrganizing || !CanOrganizeNow() || EditorConsistencyCallbackInProgress())
+        if (isOrganizing || !CanOrganizeNow())
         {
             if (Application.isPlaying)
             {
@@ -88,30 +88,6 @@ public static class SceneHierarchyOrganizer
         }
     }
 
-    private static bool EditorConsistencyCallbackInProgress()
-    {
-        var stack = new System.Diagnostics.StackTrace();
-        for (int i = 1; i < stack.FrameCount; i++)
-        {
-            var method = stack.GetFrame(i)?.GetMethod();
-            var name = method?.Name ?? string.Empty;
-            if (
-                name.Contains("OnValidate") ||
-                name.Contains("CheckConsistency") ||
-                name.Contains("OnBeforeTransformParentChanged") ||
-                name.Contains("OnTransformParentChanged") ||
-                name.Contains("OnTransformChildrenChanged") ||
-                name.Contains("Awake") ||
-                name.Contains("OnEnable") ||
-                name.Contains("OnDisable"))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
 #endif
 
     private static bool CanOrganizeNow()
@@ -121,7 +97,6 @@ public static class SceneHierarchyOrganizer
             && !UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode
             && !UnityEditor.EditorApplication.isUpdating
             && Time.frameCount >= 2
-            && !EditorConsistencyCallbackInProgress()
             && Application.isPlaying;
 #else
         return true;

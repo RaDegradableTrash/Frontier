@@ -29,11 +29,6 @@ public class HandRevealZone : MonoBehaviour
 
     private void SetRevealed(bool revealed)
     {
-        if (controller == null)
-        {
-            controller = FindObjectOfType<GameController>();
-        }
-
         controller?.SetPlayerHandRevealRequested(revealed);
     }
 }

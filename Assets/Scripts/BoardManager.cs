@@ -3,10 +3,11 @@ using UnityEngine;
 [ExecuteAlways]
 public class BoardManager : MonoBehaviour
 {
-    [SerializeField] private int frontlineColumns = 5;
-    [SerializeField] private int supportColumns = 5;
-    [SerializeField] private float slotWidth = 0.96f;
-    [SerializeField] private float slotHeight = 1.26f;
+    [SerializeField] private int frontlineColumns = 7;
+    [SerializeField] private int supportColumns = 7;
+    [SerializeField] private int boardRows = 5;
+    [SerializeField] private float slotWidth = 1.00f;
+    [SerializeField] private float slotHeight = 1.00f;
     [SerializeField] private float slotPadding = 0.20f;
     [SerializeField] private Material lineMaterial;
 
@@ -33,8 +34,21 @@ public class BoardManager : MonoBehaviour
 
     public int FrontlineColumns => frontlineColumns;
     public int SupportColumns => supportColumns;
+    public int BoardRows => Mathf.Max(3, boardRows);
+    public int BoardColumnsForAllRows => grid == null ? 0 : grid.GetLength(0);
     public float SlotHeight => slotHeight;
     public float SlotStepX => slotWidth + slotPadding;
+    public float SlotStepZ => slotHeight + slotPadding;
+
+    public SlotInteract GetSlotInRow(int row, int x)
+    {
+        if (grid == null || row < 0 || row >= grid.GetLength(1) || x < 0 || x >= grid.GetLength(0))
+        {
+            return null;
+        }
+
+        return grid[x, row];
+    }
 
     public void Initialize(GameController owner)
     {
@@ -152,7 +166,10 @@ public class BoardManager : MonoBehaviour
 
         foreach (SlotInteract slot in grid)
         {
-            slot?.DoStrike(strikePosition, rippleForce);
+            if (slot != null)
+            {
+                slot.DoStrike(strikePosition, rippleForce);
+            }
         }
     }
 
@@ -171,7 +188,8 @@ public class BoardManager : MonoBehaviour
 
     private void BuildGrid()
     {
-        supportColumns = 5;
+        frontlineColumns = 7;
+        supportColumns = 7;
         ClearExistingSlots();
         playerHeadquartersSlot = null;
         enemyHeadquartersSlot = null;
@@ -183,11 +201,14 @@ public class BoardManager : MonoBehaviour
         enemyHeadquartersSkullPreview = null;
         PrepareGeneratedHierarchy();
         int columns = Mathf.Max(frontlineColumns, supportColumns);
-        grid = new SlotInteract[columns, 3];
+        grid = new SlotInteract[columns, BoardRows];
 
-        CreateRow(SlotZone.EnemySupport, supportColumns, PlayableSceneRules.SupportRowZ, PlayableSceneRules.EnemySlotColor);
-        CreateRow(SlotZone.Frontline, frontlineColumns, 0f, PlayableSceneRules.FrontlineSlotColor);
-        CreateRow(SlotZone.PlayerSupport, supportColumns, -PlayableSceneRules.SupportRowZ, PlayableSceneRules.PlayerSlotColor);
+        float rowSpacing = PlayableSceneRules.SupportRowZ;
+        CreateRow(0, SlotZone.PlayerSupport, columns, -rowSpacing * 2f, PlayableSceneRules.PlayerSlotColor);
+        CreateRow(1, SlotZone.Frontline, columns, -rowSpacing, PlayableSceneRules.FrontlineSlotColor);
+        CreateRow(2, SlotZone.Frontline, columns, 0f, PlayableSceneRules.FrontlineSlotColor);
+        CreateRow(3, SlotZone.Frontline, columns, rowSpacing, PlayableSceneRules.FrontlineSlotColor);
+        CreateRow(4, SlotZone.EnemySupport, columns, rowSpacing * 2f, PlayableSceneRules.EnemySlotColor);
         ConfigureHeadquartersSlot(PlayerSide.Enemy);
         ConfigureHeadquartersSlot(PlayerSide.Player);
         CreateCheckerboardCells();
@@ -503,12 +524,14 @@ public class BoardManager : MonoBehaviour
         return presentationSettings != null && presentationSettings.useAuthoredPresentation;
     }
 
-    private void CreateRow(SlotZone zone, int count, float zOffset, Color color)
+    private void CreateRow(int row, SlotZone zone, int count, float zOffset, Color color)
     {
         float totalWidth = (count - 1) * SlotStepX;
-        float supportOffset = zone == SlotZone.Frontline ? 0f : -0.58f;
-        float startX = -totalWidth / 2f + supportOffset;
-        int row = ZoneToRow(zone);
+        float startX = -totalWidth / 2f;
+        if (row < 0 || row >= BoardRows)
+        {
+            return;
+        }
 
         for (int x = 0; x < count; x++)
         {
@@ -534,27 +557,34 @@ public class BoardManager : MonoBehaviour
     {
         Color dark = new Color(0.12f, 0.105f, 0.075f, 1f);
         Color light = new Color(0.17f, 0.145f, 0.095f, 1f);
-        CreateCheckerboardRow(SlotZone.EnemySupport, supportColumns, PlayableSceneRules.SupportRowZ, dark, light);
-        CreateCheckerboardRow(SlotZone.Frontline, frontlineColumns, 0f, light, dark);
-        CreateCheckerboardRow(SlotZone.PlayerSupport, supportColumns, -PlayableSceneRules.SupportRowZ, dark, light);
+        float rowSpacing = PlayableSceneRules.SupportRowZ;
+        CreateCheckerboardRow(0, SlotZone.PlayerSupport, supportColumns, -rowSpacing * 2f, dark, light);
+        CreateCheckerboardRow(1, SlotZone.Frontline, frontlineColumns, -rowSpacing, light, dark);
+        CreateCheckerboardRow(2, SlotZone.Frontline, frontlineColumns, 0f, dark, light);
+        CreateCheckerboardRow(3, SlotZone.Frontline, frontlineColumns, rowSpacing, light, dark);
+        CreateCheckerboardRow(4, SlotZone.EnemySupport, supportColumns, rowSpacing * 2f, dark, light);
     }
 
-    private void CreateCheckerboardRow(SlotZone zone, int count, float zOffset, Color firstColor, Color secondColor)
+    private void CreateCheckerboardRow(int row, SlotZone zone, int count, float zOffset, Color firstColor, Color secondColor)
     {
+        if (row < 0 || row >= BoardRows)
+        {
+            return;
+        }
+
         float totalWidth = (count - 1) * SlotStepX;
-        float supportOffset = zone == SlotZone.Frontline ? 0f : -0.58f;
-        float startX = -totalWidth / 2f + supportOffset;
+        float startX = -totalWidth / 2f;
 
         for (int x = 0; x < count; x++)
         {
-            Transform cellRoot = CreateGeneratedGroup(SurfaceGroup(zone), $"{zone}_Board_Cell_{x}");
+            Transform cellRoot = CreateGeneratedGroup(SurfaceGroup(zone), $"{zone}_Board_Cell_{row}_{x}");
             cellRoot.localPosition = new Vector3(startX + x * SlotStepX, 0f, zOffset);
 
             GameObject cell = GameObject.CreatePrimitive(PrimitiveType.Cube);
             cell.name = "Surface Tile";
             cell.transform.SetParent(cellRoot, false);
             cell.transform.localPosition = new Vector3(0f, 0.018f, 0f);
-            cell.transform.localScale = new Vector3(slotWidth * 1.03f, 0.010f, slotHeight * 1.04f);
+            cell.transform.localScale = new Vector3(slotWidth * 0.98f, 0.010f, slotHeight * 0.98f);
             DestroyGeneratedObject(cell.GetComponent<Collider>());
 
             MeshRenderer renderer = cell.GetComponent<MeshRenderer>();
@@ -676,9 +706,9 @@ public class BoardManager : MonoBehaviour
             case SlotZone.PlayerSupport:
                 return 0;
             case SlotZone.Frontline:
-                return 1;
-            case SlotZone.EnemySupport:
                 return 2;
+            case SlotZone.EnemySupport:
+                return 4;
             default:
                 return 0;
         }

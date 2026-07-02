@@ -765,8 +765,14 @@ public class CardView : MonoBehaviour
 
     public void SetLayout(Vector3 position, Vector3 scale, Quaternion rotation, bool animate)
     {
-        transform.rotation = rotation;
         motion?.SetBaseScale(scale);
+        if (isDragging)
+        {
+            hasLayout = true;
+            return;
+        }
+
+        transform.rotation = rotation;
         if (CardMotionRules.ShouldAnimateLayout(hasLayout, animate))
         {
             motion?.ResetBasePosition(position);
@@ -803,6 +809,16 @@ public class CardView : MonoBehaviour
     public void PlayMulliganDiscardFlight(Vector3 fromPosition, Vector3 toPosition)
     {
         motion?.PlayMulliganDiscardFlight(fromPosition, toPosition);
+    }
+
+    public void PlayFailedReturn(Vector3 fromPosition, Vector3 toPosition)
+    {
+        if (motion == null)
+        {
+            return;
+        }
+
+        motion.PlayFailedReturn(fromPosition, toPosition);
     }
 
     public void SetInteractionEnabled(bool enabled)
@@ -1084,7 +1100,10 @@ public class CardView : MonoBehaviour
             }
             else
             {
-                motion?.SetDragging(true);
+                if (card == null || card.Type != CardType.Order || !OrderDragRules.ShouldHoverAboveHand(card))
+                {
+                    motion?.SetDragging(true);
+                }
             }
             SetDragShadowVisible(card != null && card.Zone == CardZone.Hand);
             if (card != null && card.Zone == CardZone.Hand)
@@ -1098,10 +1117,11 @@ public class CardView : MonoBehaviour
                     : Vector3.SmoothDamp(transform.position, handDragPosition, ref dragVisualVelocity, 0.035f, 60f);
                 if (card.Type == CardType.Order && OrderDragRules.ShouldHoverAboveHand(card))
                 {
-                    Vector3 anchoredPosition = dragStartPosition + Vector3.forward * 0.20f + Vector3.up * 0.05f;
+                    Vector3 anchoredPosition = dragStartPosition + Vector3.forward * 0.28f + Vector3.up * 0.08f;
                     transform.position = startingDrag
                         ? anchoredPosition
                         : Vector3.SmoothDamp(transform.position, anchoredPosition, ref dragVisualVelocity, 0.030f, 60f);
+                    transform.rotation = Quaternion.identity;
                     controller?.HandleHandOrderDragPreview(this, pointerPosition);
                 }
                 else if (card.Type == CardType.Order && OrderDragRules.ShouldFollowPointer(card))
@@ -1114,14 +1134,25 @@ public class CardView : MonoBehaviour
                     transform.position = visualPosition;
                 }
 
-                Vector3 wobbleDelta = card.Type == CardType.Order && OrderDragRules.ShouldHoverAboveHand(card)
-                    ? pointerPosition - previousPosition
-                    : transform.position - previousPosition;
-                ApplyDragWobble(wobbleDelta);
+                if (card.Type == CardType.Order && OrderDragRules.ShouldHoverAboveHand(card))
+                {
+                    transform.rotation = Quaternion.identity;
+                }
+                else
+                {
+                    ApplyDragWobble(transform.position - previousPosition);
+                }
 
                 if (startingDrag)
                 {
-                    motion?.BeginManualDrag(transform.position);
+                    if (card.Type == CardType.Order && OrderDragRules.ShouldHoverAboveHand(card))
+                    {
+                        motion?.SetDragging(false);
+                    }
+                    else
+                    {
+                        motion?.BeginManualDrag(transform.position);
+                    }
                 }
             }
             else
@@ -1179,6 +1210,12 @@ public class CardView : MonoBehaviour
             SetDragShadowVisible(false);
             transform.rotation = Quaternion.identity;
             HoldPlayerHandOpen(false);
+            if (card != null && card.Zone == CardZone.Hand)
+            {
+                transform.position = dragStartPosition;
+                motion?.ResetBasePosition(transform.position);
+            }
+
             return true;
         }
 
@@ -1188,32 +1225,35 @@ public class CardView : MonoBehaviour
         SetDragShadowVisible(false);
         transform.rotation = Quaternion.identity;
         Vector3 releasePosition = transform.position;
-        if (card != null && card.Zone == CardZone.Hand)
-        {
-            if (TryGetPointerWorldPosition(out Vector3 handReleasePosition))
+            if (card != null && card.Zone == CardZone.Hand)
             {
-                releasePosition = handReleasePosition;
-            }
+                if (TryGetPointerWorldPosition(out Vector3 handReleasePosition))
+                {
+                    releasePosition = handReleasePosition;
+                }
 
-            transform.position = dragStartPosition;
-            motion?.ResetBasePosition(transform.position);
-            if (card.Type == CardType.Order)
-            {
+                if (card.Type == CardType.Order)
+                {
+                    controller?.ClearDragPreview();
+                    controller?.HandleHandOrderReleased(this, releasePosition);
+                    HoldPlayerHandOpen(false);
+                    return true;
+                }
+
                 controller?.ClearDragPreview();
-                controller?.HandleHandOrderReleased(this, releasePosition);
+                controller?.HandleCardReleased(this, releasePosition);
                 HoldPlayerHandOpen(false);
                 return true;
             }
-        }
-        else if (TryGetPointerWorldPosition(out Vector3 boardReleasePosition))
-        {
-            releasePosition = boardReleasePosition;
-        }
+            else if (TryGetPointerWorldPosition(out Vector3 boardReleasePosition))
+            {
+                releasePosition = boardReleasePosition;
+            }
 
-        controller?.ClearDragPreview();
-        controller?.HandleCardReleased(this, releasePosition);
-        HoldPlayerHandOpen(false);
-        return true;
+            controller?.ClearDragPreview();
+            controller?.HandleCardReleased(this, releasePosition);
+            HoldPlayerHandOpen(false);
+            return true;
     }
 
     private void OnMouseEnter()
@@ -1456,27 +1496,11 @@ public class CardView : MonoBehaviour
 
         if (TryBuildVisualsFromPrefab(hidden))
         {
-            motion = gameObject.AddComponent<CardMotion>();
+            motion = gameObject.GetComponent<CardMotion>() ?? gameObject.AddComponent<CardMotion>();
             return;
         }
 
-        if (IsBoardUnitCard())
-        {
-            BuildRuntimeBoardCard(hidden);
-        }
-        else
-        {
-            BuildRuntimeHandCard(hidden);
-        }
-
-        selectionLabel.text = string.Empty;
-        Renderer selectionLabelRenderer = selectionLabel.GetComponent<Renderer>();
-        if (selectionLabelRenderer != null)
-        {
-            selectionLabelRenderer.enabled = false;
-        }
-
-        motion = gameObject.AddComponent<CardMotion>();
+        Debug.LogError($"Card prefab build failed for '{card?.CardName ?? "<null>"}'. Ensure prefabs are present in Resources/{CardPrefabResourcePath()}.");
     }
 
     private void BuildRuntimeHandCard(bool hidden)
@@ -1602,7 +1626,7 @@ public class CardView : MonoBehaviour
 
     private bool TryBuildVisualsFromPrefab(bool hidden)
     {
-        if (Application.isPlaying && !UsePrefabVisualsInPlayMode)
+        if (!UsePrefabVisualsInPlayMode)
         {
             return false;
         }
@@ -1611,6 +1635,7 @@ public class CardView : MonoBehaviour
         CardPrefabTemplate prefab = Resources.Load<CardPrefabTemplate>(resourcePath);
         if (prefab == null)
         {
+            Debug.LogError($"Missing card prefab template '{resourcePath}' for card {card?.CardName ?? "<null>"}.");
             return false;
         }
 
@@ -1906,7 +1931,7 @@ public class CardView : MonoBehaviour
             return;
         }
 
-        string artKey = CardArtworkKey(card.CardName);
+        string artKey = ResolveArtworkKeyForCard(card, IsBoardUnitCard());
         Texture2D artTexture = Resources.Load<Texture2D>($"CardArt/{artKey}");
         Texture2D blurTexture = Resources.Load<Texture2D>($"CardArtBlur/{artKey}");
 
@@ -1948,59 +1973,163 @@ public class CardView : MonoBehaviour
         return height <= 0.001f ? 1f : Mathf.Max(0.001f, width / height);
     }
 
-    private static string CardArtworkKey(string cardName)
+    private static string ResolveArtworkKeyForCard(RuntimeCard runtimeCard, bool forBoardCard)
+    {
+        if (runtimeCard == null)
+        {
+            return string.Empty;
+        }
+
+        string keyByCardName = CardArtworkKey(runtimeCard.CardName, forBoardCard);
+        string resolvedByCardName = EnsureExistingArtworkKey(keyByCardName);
+        if (!string.IsNullOrEmpty(resolvedByCardName))
+        {
+            return resolvedByCardName;
+        }
+
+        if (runtimeCard.Artwork != null)
+        {
+            string boundKey = ResolveArtworkKeyForTextureName(runtimeCard.Artwork.name, forBoardCard);
+            if (!string.IsNullOrEmpty(boundKey))
+            {
+                string existingBoundKey = EnsureExistingArtworkKey(boundKey);
+                if (!string.IsNullOrEmpty(existingBoundKey))
+                {
+                    return existingBoundKey;
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
+    public static string ResolveArtworkKey(RuntimeCard runtimeCard, bool forBoardCard)
+    {
+        return ResolveArtworkKeyForCard(runtimeCard, forBoardCard);
+    }
+
+    public static Texture2D ResolveArtworkTexture(RuntimeCard runtimeCard, bool forBoardCard)
+    {
+        string key = ResolveArtworkKey(runtimeCard, forBoardCard);
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return null;
+        }
+
+        return Resources.Load<Texture2D>($"CardArt/{key}");
+    }
+
+    private static string EnsureExistingArtworkKey(string artworkKey)
+    {
+        if (string.IsNullOrWhiteSpace(artworkKey))
+        {
+            return string.Empty;
+        }
+
+        if (Resources.Load<Texture2D>($"CardArt/{artworkKey}") != null)
+        {
+            return artworkKey;
+        }
+
+        return string.Empty;
+    }
+
+    private static string ResolveArtworkKeyForTextureName(string textureName, bool forBoardCard)
+    {
+        if (string.IsNullOrWhiteSpace(textureName))
+        {
+            return string.Empty;
+        }
+
+        string handKey = textureName;
+        string boardKey = $"{textureName}_Avator";
+
+        if (forBoardCard)
+        {
+            string explicitBoard = textureName.EndsWith("_Avator", System.StringComparison.OrdinalIgnoreCase)
+                ? textureName
+                : $"{textureName}_Avator";
+            if (Resources.Load<Texture2D>($"CardArt/{explicitBoard}") != null)
+            {
+                return explicitBoard;
+            }
+        }
+        else if (textureName.EndsWith("_Avator", System.StringComparison.OrdinalIgnoreCase))
+        {
+            handKey = textureName.Substring(0, textureName.Length - "_Avator".Length);
+            if (Resources.Load<Texture2D>($"CardArt/{handKey}") != null)
+            {
+                return handKey;
+            }
+        }
+
+        return Resources.Load<Texture2D>($"CardArt/{textureName}") != null
+            ? textureName
+            : (forBoardCard ? boardKey : handKey);
+    }
+
+    private static string CardArtworkKey(string cardName, bool forBoardCard)
     {
         string normalized = NormalizeArtworkKey(cardName);
+        if (forBoardCard && !normalized.EndsWith("_avator"))
+        {
+            string boardPreferred = $"{normalized}_Avator";
+            if (Resources.Load<Texture2D>($"CardArt/{boardPreferred}") != null)
+            {
+                return boardPreferred;
+            }
+        }
+
         if (normalized.Contains("perlica") || normalized.Contains("佩丽卡"))
         {
-            return FirstExistingArtworkKey("Perlica", "Mifu");
+            return FirstExistingArtworkKey(forBoardCard ? new[] { "Perlica_Avator", "Perlica" } : new[] { "Perlica" }, forBoardCard ? "Perlica_Avator" : "Perlica");
         }
 
         if (normalized.Contains("chenqianyu") || normalized.Contains("陈千语"))
         {
-            return FirstExistingArtworkKey("ChenQianyu", "Chenqianyu", "Tangtang");
+            return FirstExistingArtworkKey(forBoardCard ? new[] { "Chenqianyu_Avator", "Chenqianyu" } : new[] { "Chenqianyu", "ChenQianyu" }, forBoardCard ? "Chenqianyu_Avator" : "Chenqianyu");
         }
 
         if (normalized.Contains("gilberta") || normalized.Contains("洁尔佩塔"))
         {
-            return FirstExistingArtworkKey("Gilberta", "Zhuangfangyi");
+            return FirstExistingArtworkKey(forBoardCard ? new[] { "Gilberta_Avator", "Gilberta" } : new[] { "Gilberta" }, forBoardCard ? "Gilberta_Avator" : "Gilberta");
         }
 
         if (normalized.Contains("signallost") || normalized.Contains("连接丢失"))
         {
-            return "Rossi";
+            return FirstExistingArtworkKey(forBoardCard ? new[] { "FieldIntel_Avator", "FieldIntel" } : new[] { "FieldIntel" }, forBoardCard ? "FieldIntel_Avator" : "FieldIntel");
         }
 
         if (normalized.Contains("omvdijiang") || normalized.Contains("dijiang") || normalized.Contains("帝江号"))
         {
-            return "Dijiang";
+            return FirstExistingArtworkKey(forBoardCard ? new[] { "DijiangClearTheArea_Avator", "DijiangClearTheArea" } : new[] { "DijiangClearTheArea" }, forBoardCard ? "DijiangClearTheArea_Avator" : "DijiangClearTheArea");
         }
 
         if (normalized.Contains("fieldintel"))
         {
-            return "Lifeng";
+            return FirstExistingArtworkKey(forBoardCard ? new[] { "FieldIntel_Avator", "FieldIntel" } : new[] { "FieldIntel" }, forBoardCard ? "FieldIntel_Avator" : "FieldIntel");
         }
 
         if (normalized.Contains("airborne") || normalized.Contains("空降"))
         {
-            return "Lifeng";
+            return FirstExistingArtworkKey(forBoardCard ? new[] { "Airborne_Avator", "Airborne" } : new[] { "Airborne" }, forBoardCard ? "Airborne_Avator" : "Airborne");
         }
 
         if (normalized.Contains("trap") || normalized.Contains("诱饵"))
         {
-            return "Rossi";
+            return "Trap";
         }
 
         if (normalized == "m3" || normalized.Contains("m3"))
         {
-            return "M3";
+            return forBoardCard && Resources.Load<Texture2D>("CardArt/M3_Avator") != null ? "M3_Avator" : "M3";
         }
 
         Texture2D exact = Resources.Load<Texture2D>($"CardArt/{cardName}");
-        return exact != null ? cardName : "M3";
+        return exact != null ? cardName : string.Empty;
     }
 
-    private static string FirstExistingArtworkKey(params string[] keys)
+    private static string FirstExistingArtworkKey(string[] keys, string fallback)
     {
         for (int i = 0; i < keys.Length; i++)
         {
@@ -2010,7 +2139,7 @@ public class CardView : MonoBehaviour
             }
         }
 
-        return keys.Length > 0 ? keys[keys.Length - 1] : "M3";
+        return fallback;
     }
 
     private static string NormalizeArtworkKey(string value)
@@ -2035,12 +2164,17 @@ public class CardView : MonoBehaviour
 
     private string CardPrefabResourcePath()
     {
-        if (card != null && card.Type == CardType.Unit)
+        return ResolvePrefabPath(card, useHandPrefab);
+    }
+
+    public static string ResolvePrefabPath(RuntimeCard runtimeCard, bool useHandPrefab)
+    {
+        if (runtimeCard != null && runtimeCard.Type == CardType.Unit)
         {
             if (!useHandPrefab
-                && (card.Zone == CardZone.PlayerSupport
-                    || card.Zone == CardZone.Frontline
-                    || card.Zone == CardZone.EnemySupport))
+                && (runtimeCard.Zone == CardZone.PlayerSupport
+                    || runtimeCard.Zone == CardZone.Frontline
+                    || runtimeCard.Zone == CardZone.EnemySupport))
             {
                 return "CardPrefabs/UnitCard_Board";
             }
@@ -2048,7 +2182,7 @@ public class CardView : MonoBehaviour
             return "CardPrefabs/UnitCard_Hand";
         }
 
-        if (card != null && card.Type == CardType.Countermeasure)
+        if (runtimeCard != null && runtimeCard.Type == CardType.Countermeasure)
         {
             return "CardPrefabs/CounterCard_Hand";
         }
@@ -2166,7 +2300,7 @@ public class CardView : MonoBehaviour
             return;
         }
 
-        string artKey = CardArtworkKey(card.CardName);
+        string artKey = ResolveArtworkKeyForCard(card, IsBoardUnitCard());
         Texture2D artTexture = Resources.Load<Texture2D>($"CardArt/{artKey}");
         if (artTexture != null)
         {
@@ -2408,26 +2542,25 @@ public class CardView : MonoBehaviour
             return;
         }
 
-        discardOverlay = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        discardOverlay.name = "Mulligan Discard Overlay";
-        discardOverlay.transform.SetParent(transform, false);
-        discardOverlay.transform.localPosition = new Vector3(0f, 0.11f, 0f);
-        discardOverlay.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        discardOverlay.transform.localScale = new Vector3(0.42f, 0.42f, 1f);
-        Collider collider = discardOverlay.GetComponent<Collider>();
-        if (collider != null)
+        discardOverlay = FindFirstChildTransform(transform, "Mulligan Discard Overlay").gameObject;
+        if (discardOverlay == null)
         {
-            RuntimeSafeDestroy.Destroy(collider);
+            return;
         }
 
         discardOverlayRenderer = discardOverlay.GetComponent<MeshRenderer>();
-        discardOverlayRenderer.material = CreateRuntimeTextureMaterial(Color.white);
-        Texture2D discardTexture = SceneIconRegistry.Active != null
-            ? SceneIconRegistry.Active.DiscardThisCardIcon
-            : Resources.Load<Texture2D>("Icons/DiscardThisCard");
-        if (discardTexture != null)
+        if (discardOverlayRenderer != null)
         {
-            discardOverlayRenderer.material.mainTexture = discardTexture;
+            discardOverlayRenderer.material = discardOverlayRenderer.material != null
+                ? discardOverlayRenderer.material
+                : CreateRuntimeTextureMaterial(Color.white);
+            Texture2D discardTexture = SceneIconRegistry.Active != null
+                ? SceneIconRegistry.Active.DiscardThisCardIcon
+                : Resources.Load<Texture2D>("Icons/DiscardThisCard");
+            if (discardTexture != null)
+            {
+                discardOverlayRenderer.material.mainTexture = discardTexture;
+            }
         }
 
         discardOverlay.SetActive(false);
@@ -2440,29 +2573,53 @@ public class CardView : MonoBehaviour
             return;
         }
 
-        damagePreviewLabel = CreateCardText("Damage Preview Label", new Vector3(0f, 0.132f, 0f), 0.13f, TextAnchor.MiddleCenter, new Color(1f, 0.24f, 0.14f));
-        SetTextVisible(damagePreviewLabel, false);
-
-        damagePreviewSkullObject = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        damagePreviewSkullObject.name = "Damage Preview Skull";
-        damagePreviewSkullObject.transform.SetParent(transform, false);
-        damagePreviewSkullObject.transform.localPosition = new Vector3(0f, 0.134f, 0f);
-        damagePreviewSkullObject.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        damagePreviewSkullObject.transform.localScale = new Vector3(0.34f, 0.34f, 1f);
-        Collider collider = damagePreviewSkullObject.GetComponent<Collider>();
-        if (collider != null)
+        if (damagePreviewLabel == null)
         {
-            RuntimeSafeDestroy.Destroy(collider);
+            Transform labelTransform = FindFirstChildTransform(transform, "Damage Preview Label");
+            if (labelTransform != null)
+            {
+                damagePreviewLabel = labelTransform.GetComponent<TMP_Text>();
+            }
+        }
+
+        if (damagePreviewSkullObject == null)
+        {
+            Transform skullTransform = FindFirstChildTransform(transform, "Damage Preview Skull");
+            if (skullTransform != null)
+            {
+                damagePreviewSkullObject = skullTransform.gameObject;
+            }
+        }
+
+        if (damagePreviewLabel == null && damagePreviewSkullObject == null)
+        {
+            return;
+        }
+
+        if (damagePreviewLabel != null)
+        {
+            damagePreviewLabel.text = string.Empty;
+            SetTextVisible(damagePreviewLabel, false);
+        }
+
+        if (damagePreviewSkullObject == null)
+        {
+            return;
         }
 
         damagePreviewSkullRenderer = damagePreviewSkullObject.GetComponent<MeshRenderer>();
-        damagePreviewSkullRenderer.material = CreateRuntimeTextureMaterial(Color.white);
-        Texture2D skullTexture = SceneIconRegistry.Active != null
-            ? SceneIconRegistry.Active.EstimatedDeathSkullIcon
-            : Resources.Load<Texture2D>("Icons/EstimatedDeathSkull");
-        if (skullTexture != null)
+        if (damagePreviewSkullRenderer != null)
         {
-            damagePreviewSkullRenderer.material.mainTexture = skullTexture;
+            damagePreviewSkullRenderer.material = damagePreviewSkullRenderer.material != null
+                ? damagePreviewSkullRenderer.material
+                : CreateRuntimeTextureMaterial(Color.white);
+            Texture2D skullTexture = SceneIconRegistry.Active != null
+                ? SceneIconRegistry.Active.EstimatedDeathSkullIcon
+                : Resources.Load<Texture2D>("Icons/EstimatedDeathSkull");
+            if (skullTexture != null)
+            {
+                damagePreviewSkullRenderer.material.mainTexture = skullTexture;
+            }
         }
 
         damagePreviewSkullObject.SetActive(false);
@@ -2475,45 +2632,40 @@ public class CardView : MonoBehaviour
             return;
         }
 
-        keywordIconColumn = new GameObject("Keyword Icon Column");
-        keywordIconColumn.transform.SetParent(transform, false);
-        keywordIconColumn.transform.localPosition = new Vector3(CardWidth * 0.56f, 0.09f, 0f);
+        keywordIconColumn = FindFirstChildTransform(transform, "Keyword Icon Column")?.gameObject;
     }
 
     private void CreateKeywordIcon(CardKeyword keyword, int index)
     {
-        GameObject iconObject = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        iconObject.name = $"Keyword Icon {keyword}";
-        iconObject.transform.SetParent(keywordIconColumn.transform, false);
-        iconObject.transform.localPosition = new Vector3(0f, 0f, CardHeight * 0.34f - index * 0.18f);
-        iconObject.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        iconObject.transform.localScale = new Vector3(0.14f, 0.14f, 1f);
-        Collider collider = iconObject.GetComponent<Collider>();
-        if (collider != null)
+        if (keywordIconColumn == null)
         {
-            RuntimeSafeDestroy.Destroy(collider);
+            return;
         }
 
+        string iconName = $"Keyword Icon {keyword}";
+        Transform iconTransform = FindFirstChildTransform(keywordIconColumn.transform, iconName);
+        if (iconTransform == null)
+        {
+            return;
+        }
+
+        GameObject iconObject = iconTransform.gameObject;
         MeshRenderer renderer = iconObject.GetComponent<MeshRenderer>();
-        renderer.material = CreateRuntimeTextureMaterial(Color.white);
-        Texture2D iconTexture = KeywordIconTexture(keyword);
-        if (iconTexture != null)
+        if (renderer != null)
         {
-            renderer.material.mainTexture = iconTexture;
-            renderer.material.color = Color.white;
+            renderer.material = renderer.material != null ? renderer.material : CreateRuntimeTextureMaterial(Color.white);
+            Texture2D iconTexture = KeywordIconTexture(keyword);
+            if (iconTexture != null)
+            {
+                renderer.material.mainTexture = iconTexture;
+                renderer.material.color = Color.white;
+            }
+            else
+            {
+                renderer.material.color = KeywordIconColor(keyword);
+            }
         }
-        else
-        {
-            renderer.material.color = KeywordIconColor(keyword);
-        }
-        GameObject labelObject = new GameObject("Keyword Label");
-        labelObject.transform.SetParent(iconObject.transform, false);
-        labelObject.transform.localPosition = new Vector3(0f, 0f, -0.02f);
-        labelObject.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-        TMP_Text textMesh = labelObject.AddComponent<TextMeshPro>();
-        textMesh.text = CardKeywordIconRules.Label(keyword);
-        ConfigureTmpText(textMesh, 0.018f, TextAnchor.MiddleCenter);
-        textMesh.color = Color.white;
+
         keywordIconObjects.Add(iconObject);
     }
 
@@ -2528,6 +2680,32 @@ public class CardView : MonoBehaviour
         }
 
         keywordIconObjects.Clear();
+    }
+
+    private static Transform FindFirstChildTransform(Transform root, string childName)
+    {
+        if (root == null || string.IsNullOrEmpty(childName))
+        {
+            return null;
+        }
+
+        Transform direct = root.Find(childName);
+        if (direct != null)
+        {
+            return direct;
+        }
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform child = root.GetChild(i);
+            Transform nested = FindFirstChildTransform(child, childName);
+            if (nested != null)
+            {
+                return nested;
+            }
+        }
+
+        return null;
     }
 
     private Color KeywordIconColor(CardKeyword keyword)

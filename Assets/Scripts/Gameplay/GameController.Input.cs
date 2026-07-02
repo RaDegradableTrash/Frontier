@@ -56,8 +56,7 @@ public partial class GameController
             {
                 if (!playerHandRevealed)
                 {
-                    playerHandRevealed = true;
-                    RefreshHandLayouts();
+                    SetPlayerHandRevealed(true);
                 }
 
                 return;
@@ -67,8 +66,7 @@ public partial class GameController
             {
                 if (playerHandRevealed)
                 {
-                    playerHandRevealed = false;
-                    RefreshHandLayouts();
+                    SetPlayerHandRevealed(false);
                 }
 
                 return;
@@ -86,16 +84,15 @@ public partial class GameController
                 return;
             }
 
-            playerHandRevealed = shouldReveal;
-            RefreshHandLayouts();
+            SetPlayerHandRevealed(shouldReveal);
         }
 
         public void SetPlayerHandRevealRequested(bool revealRequested)
         {
-            playerHandRevealRequested = revealRequested;
             if (revealRequested)
             {
                 playerHandRevealGraceUntil = Time.time + 0.14f;
+                playerHandRevealRequested = true;
                 UpdateHandReveal();
             }
         }
@@ -144,7 +141,7 @@ public partial class GameController
         private void RevealPlayerHandBriefly(float seconds = 4f)
         {
             playerHandRevealGraceUntil = Time.time + seconds;
-            playerHandRevealed = true;
+            SetPlayerHandRevealed(true);
         }
 
         public void HandleCardClicked(CardView view)
@@ -202,7 +199,7 @@ public partial class GameController
             {
                 ClearSelection();
                 hoveredHandCardId = null;
-                playerHandRevealed = true;
+                SetPlayerHandRevealed(true);
                 playerHandRevealGraceUntil = Time.time + 2.25f;
                 centerInspectCard = clicked;
                 inspectedCard = clicked;
@@ -365,7 +362,7 @@ public partial class GameController
 
                 ClearSelection();
                 hoveredHandCardId = null;
-                playerHandRevealed = true;
+                SetPlayerHandRevealed(true);
                 playerHandRevealGraceUntil = Time.time + 2.25f;
                 centerInspectCard = clicked;
                 inspectedCard = clicked;
@@ -389,10 +386,10 @@ public partial class GameController
 
             ClearSelection();
             hoveredHandCardId = null;
-            playerHandRevealed = true;
-            playerHandRevealGraceUntil = Time.time + 2.25f;
-            centerInspectCard = clicked;
-            inspectedCard = clicked;
+                SetPlayerHandRevealed(true);
+                playerHandRevealGraceUntil = Time.time + 2.25f;
+                centerInspectCard = clicked;
+                inspectedCard = clicked;
             SetStatus($"Viewing {clicked.CardName}. Drag the hand card to play it.");
             RefreshSceneInspector();
             RefreshAllViews();
@@ -421,6 +418,11 @@ public partial class GameController
                 hoveredHandCardId = null;
                 DestroyCenterInspectView();
                 inspectedCard = view.Card;
+            }
+
+            if (view.Card.Owner == PlayerSide.Player && view.Card.Zone == CardZone.Hand)
+            {
+                BeginDraggingHandCard(view.Card);
             }
         }
 
@@ -494,6 +496,7 @@ public partial class GameController
             if (phase != GamePhase.PlayerTurn || activeSide != PlayerSide.Player)
             {
                 SetStatus(SceneGuidanceRules.BlockedInteractionPrompt(phase, activeSide));
+                ClearDraggedHandCardIfNeeded(true);
                 ClearCardInspectState();
                 ClearSelection();
                 RefreshAllViews();
@@ -503,7 +506,12 @@ public partial class GameController
             SlotInteract slot = ResolvePointerSlot(releasePosition, view.Card);
             if (slot == null)
             {
-                RejectSelectedHandCard(SceneGuidanceRules.MissedDragTargetPrompt(view.Card));
+                if (IsDraggingHandCard(view.Card))
+                {
+                    ClearDraggedHandCardIfNeeded(true);
+                }
+
+                HandleFailedCardPlacement(view, SceneGuidanceRules.MissedDragTargetPrompt(view.Card));
                 return;
             }
 
@@ -513,6 +521,34 @@ public partial class GameController
             }
 
             HandleSlotClicked(slot);
+
+            if (selectedCard == view.Card || IsDraggingHandCard(view.Card))
+            {
+                ClearDraggedHandCardIfNeeded(false);
+            }
+        }
+
+        private void HandleFailedCardPlacement(CardView view, string statusMessage)
+        {
+            if (view == null || view.Card == null)
+            {
+                return;
+            }
+
+            SetStatus(statusMessage);
+            if (view.Card.Zone == CardZone.Hand && view.Card.Owner == PlayerSide.Player)
+            {
+                Vector3 returnPosition = DraggedHandReturnPosition(view.Card);
+                view.PlayFailedReturn(view.transform.position, returnPosition);
+            }
+
+            if (selectedCard == view.Card)
+            {
+                ClearSelection();
+            }
+
+            RefreshSceneInspector();
+            RefreshHandLayouts();
         }
 
         public void HandleBoardCardDragPreview(CardView view, Vector3 pointerPosition)
@@ -581,6 +617,7 @@ public partial class GameController
             if (phase != GamePhase.PlayerTurn || activeSide != PlayerSide.Player)
             {
                 SetStatus(SceneGuidanceRules.BlockedInteractionPrompt(phase, activeSide));
+                ClearDraggedHandCardIfNeeded(true);
                 RefreshAllViews();
                 return;
             }
@@ -595,6 +632,7 @@ public partial class GameController
                 else
                 {
                     RejectSelectedHandCard(SceneGuidanceRules.CannotAffordCardPrompt(view.Card, "play order", player.Kredits));
+                    ClearDraggedHandCardIfNeeded(true);
                 }
 
                 return;
@@ -603,17 +641,26 @@ public partial class GameController
             SlotInteract slot = ResolvePointerOrderSlot(releasePosition, view.Card);
             if (view.Card.EffectType == CardEffectType.DeployWithBlitz)
             {
-                TryPlayAirborneDeployment(slot);
+                bool played = TryPlayAirborneDeployment(slot);
+                if (played)
+                {
+                    ClearDraggedHandCardIfNeeded(false);
+                }
                 return;
             }
 
             if (slot == null || !IsLegalOrderTarget(view.Card, slot, PlayerSide.Player))
             {
                 RejectSelectedHandCard(SceneGuidanceRules.IllegalOrderTargetPrompt(view.Card, slot != null ? slot.Occupant : null, PlayerSide.Player));
+                ClearDraggedHandCardIfNeeded(true);
                 return;
             }
 
-            TryPlayOrderOnSlot(slot);
+            bool playedOrder = TryPlayOrderOnSlot(slot);
+            if (playedOrder)
+            {
+                ClearDraggedHandCardIfNeeded(false);
+            }
         }
 
         public void ClearDragPreview()
@@ -705,9 +752,8 @@ public partial class GameController
             {
                 PlayerSide headquartersSide = slot.Zone == SlotZone.EnemySupport ? PlayerSide.Enemy : PlayerSide.Player;
                 bool handUnitCannotDeployToHeadquarters = selectedCard.Zone == CardZone.Hand && selectedCard.Type == CardType.Unit;
-                bool supportUnitCannotAttackHeadquarters = selectedCard.Zone == CardZone.PlayerSupport;
-                bool frontlineUnitTargetsOwnHeadquarters = selectedCard.Zone == CardZone.Frontline && headquartersSide == selectedCard.Owner;
-                if (handUnitCannotDeployToHeadquarters || supportUnitCannotAttackHeadquarters || frontlineUnitTargetsOwnHeadquarters)
+                bool selectedUnitTargetingOwnHeadquarters = selectedCard.Type == CardType.Unit && headquartersSide == selectedCard.Owner;
+                if (handUnitCannotDeployToHeadquarters || selectedUnitTargetingOwnHeadquarters)
                 {
                     SetStatus(SceneGuidanceRules.IllegalHeadquartersTargetPrompt(selectedCard, headquartersSide));
                     return;
@@ -739,7 +785,7 @@ public partial class GameController
                 return;
             }
 
-            if (selectedCard.Zone == CardZone.PlayerSupport && slot.Zone == SlotZone.Frontline)
+            if (selectedCard.Type == CardType.Unit)
             {
                 if (slot.IsOccupied && slot.Occupant != null && slot.Occupant.Owner != selectedCard.Owner)
                 {
@@ -747,14 +793,9 @@ public partial class GameController
                 }
                 else
                 {
-                    TryMoveToFrontline(slot);
+                    TryMoveToSlot(selectedCard, slot);
                 }
                 return;
-            }
-
-            if (selectedCard.Zone == CardZone.Frontline)
-            {
-                TryAttack(slot);
             }
         }
 
@@ -1113,9 +1154,12 @@ public partial class GameController
                 : HandPosition(PlayerSide.Player, index, player.Hand.Count);
             if (returningView == null)
             {
-                GameObject returnObject = new GameObject($"ReturningOrder_{order.CardName}");
-                returningView = returnObject.AddComponent<CardView>();
-                returningView.Initialize(order, this, false, true);
+                returningView = CreateTransientCardView(order);
+                if (returningView == null)
+                {
+                    return;
+                }
+
                 returningView.SetLayout(
                     PlayableSceneRules.OrderDisplayAnchor,
                     new Vector3(PlayableSceneRules.OrderDisplayScale, 1f, PlayableSceneRules.OrderDisplayScale),
@@ -1233,45 +1277,7 @@ public partial class GameController
                 return null;
             }
 
-            string name = card.CardName;
-            if (name.Contains("佩丽卡"))
-            {
-                return Resources.Load<Texture2D>("CardArt/Perlica") ?? Resources.Load<Texture2D>("CardArt/Mifu");
-            }
-            if (name.Contains("陈千语"))
-            {
-                return Resources.Load<Texture2D>("CardArt/ChenQianyu") ?? Resources.Load<Texture2D>("CardArt/Chenqianyu") ?? Resources.Load<Texture2D>("CardArt/Tangtang");
-            }
-            if (name.Contains("洁尔佩塔"))
-            {
-                return Resources.Load<Texture2D>("CardArt/Gilberta") ?? Resources.Load<Texture2D>("CardArt/Zhuangfangyi");
-            }
-            if (name.Contains("M3"))
-            {
-                return Resources.Load<Texture2D>("CardArt/M3");
-            }
-            if (name.Contains("空降"))
-            {
-                return Resources.Load<Texture2D>("CardArt/Airborne") ?? Resources.Load<Texture2D>("CardArt/Perlica");
-            }
-            if (name.Contains("连接丢失"))
-            {
-                return Resources.Load<Texture2D>("CardArt/Rossi") ?? Resources.Load<Texture2D>("CardArt/SignalLost") ?? Resources.Load<Texture2D>("CardArt/Perlica");
-            }
-            if (name.Contains("帝江"))
-            {
-                return Resources.Load<Texture2D>("CardArt/Dijiang") ?? Resources.Load<Texture2D>("CardArt/OMVDijiang") ?? Resources.Load<Texture2D>("CardArt/DiJiang") ?? Resources.Load<Texture2D>("CardArt/M3");
-            }
-            if (name.Contains("诱饵"))
-            {
-                return Resources.Load<Texture2D>("CardArt/Rossi") ?? Resources.Load<Texture2D>("CardArt/Trap") ?? Resources.Load<Texture2D>("CardArt/Perlica");
-            }
-            if (name.Contains("FIELD INTEL"))
-            {
-                return Resources.Load<Texture2D>("CardArt/Lifeng") ?? Resources.Load<Texture2D>("CardArt/FieldIntel") ?? Resources.Load<Texture2D>("CardArt/Perlica");
-            }
-
-            return Resources.Load<Texture2D>($"CardArt/{name}") ?? Resources.Load<Texture2D>("CardArt/M3");
+            return CardView.ResolveArtworkTexture(card, false);
         }
 
         private string BuildInspectHudText(RuntimeCard card)
@@ -1368,9 +1374,10 @@ public partial class GameController
 
             CardView bestView = null;
             float bestDistance = float.MaxValue;
+            float distance;
             foreach (CardView view in cardViews)
             {
-                if (view == null || !view.TryPointerRaycastDistance(mainCamera, screenPointer, out float distance))
+                if (view == null || !view.TryPointerRaycastDistance(mainCamera, screenPointer, out distance))
                 {
                     continue;
                 }
@@ -1386,7 +1393,7 @@ public partial class GameController
             {
                 foreach (CardView view in cardViews)
                 {
-                    if (view == null || !view.TryPointerProjectedDistance(mainCamera, screenPointer, out float distance))
+                    if (view == null || !view.TryPointerProjectedDistance(mainCamera, screenPointer, out distance))
                     {
                         continue;
                     }
@@ -1411,9 +1418,10 @@ public partial class GameController
 
             CardView bestView = null;
             float bestDistance = float.MaxValue;
+            float distance;
             foreach (CardView view in cardViews)
             {
-                if (view == null || !view.TryPointerProjectedDistance(mainCamera, screenPointer, out float distance))
+                if (view == null || !view.TryPointerProjectedDistance(mainCamera, screenPointer, out distance))
                 {
                     continue;
                 }
@@ -1633,17 +1641,20 @@ public partial class GameController
                 return handView;
             }
 
-            if (centerInspectView != null
-                && centerInspectView.TryPointerProjectedDistance(mainCamera, Input.mousePosition, out _))
+            if (centerInspectView != null)
             {
-                return centerInspectView;
+                float centerInspectDistance;
+                if (centerInspectView.TryPointerProjectedDistance(mainCamera, Input.mousePosition, out centerInspectDistance))
+                {
+                    return centerInspectView;
+                }
             }
-
             CardView bestView = null;
             float bestDistance = float.MaxValue;
+            float distance;
             foreach (CardView view in cardViews)
             {
-                if (view == null || !view.TryPointerScreenDistance(mainCamera, out float distance))
+                if (view == null || !view.TryPointerScreenDistance(mainCamera, out distance))
                 {
                     continue;
                 }
@@ -1662,7 +1673,7 @@ public partial class GameController
 
             foreach (CardView view in cardViews)
             {
-                if (view == null || !view.TryPointerProjectedDistance(mainCamera, Input.mousePosition, out float distance))
+                if (view == null || !view.TryPointerProjectedDistance(mainCamera, Input.mousePosition, out distance))
                 {
                     continue;
                 }
@@ -1679,10 +1690,7 @@ public partial class GameController
                 return bestView;
             }
 
-            if (sceneCommandButtons.Count == 0)
-            {
-                sceneCommandButtons.AddRange(FindObjectsOfType<SceneCommandButton>());
-            }
+            EnsureSceneCommandButtonsCached();
 
             foreach (SceneCommandButton button in sceneCommandButtons)
             {
@@ -1692,7 +1700,9 @@ public partial class GameController
                 }
 
                 bool available = IsSceneCommandAvailable(button.Command);
-                if (IsSceneCommandVisible(button.Command, available) && TryPointerSceneCommandDistance(button, mainCamera, out _))
+                float commandDistance;
+                if (IsSceneCommandVisible(button.Command, available)
+                    && TryPointerSceneCommandDistance(button, mainCamera, out commandDistance))
                 {
                     return null;
                 }
@@ -1717,7 +1727,8 @@ public partial class GameController
                     continue;
                 }
 
-                if (view.TryPointerProjectedDistance(mainCamera, screenPointer, out _))
+                float unusedDistance;
+                if (view.TryPointerProjectedDistance(mainCamera, screenPointer, out unusedDistance))
                 {
                     return view;
                 }
@@ -1919,10 +1930,7 @@ public partial class GameController
                 return;
             }
 
-            if (sceneCommandButtons.Count == 0)
-            {
-                sceneCommandButtons.AddRange(FindObjectsOfType<SceneCommandButton>());
-            }
+            EnsureSceneCommandButtonsCached();
 
             SceneCommandButton bestButton = null;
             float bestDistance = float.MaxValue;
@@ -1939,7 +1947,8 @@ public partial class GameController
                     continue;
                 }
 
-                if (!TryPointerSceneCommandDistance(button, mainCamera, out float distance))
+                float distance;
+                if (!TryPointerSceneCommandDistance(button, mainCamera, out distance))
                 {
                     continue;
                 }

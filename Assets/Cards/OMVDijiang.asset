@@ -28,6 +28,6 @@ MonoBehaviour:
   addedCardName: 
   specialRules:
   - {fileID: 11400000, guid: 2faae12033425465585fd6d7de64d486, type: 2}
-  artwork: {fileID: 0}
+  artwork: {fileID: 21300000, guid: 5fbd89da72e6b48dda8ed3c823658ba2, type: 3}
   attack: 0
   defense: 0

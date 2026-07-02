@@ -23,8 +23,8 @@ public partial class GameController
 
     private void StartTurn(PlayerSide side)
     {
-        activeSide = side;
-        phase = side == PlayerSide.Player ? GamePhase.PlayerTurn : GamePhase.EnemyTurn;
+        SetActiveSide(side);
+        SetGamePhase(side == PlayerSide.Player ? GamePhase.PlayerTurn : GamePhase.EnemyTurn);
         PlayerState state = GetState(side);
         ResolveFieldIntelDraws(state);
         state.StartTurn();
@@ -229,7 +229,8 @@ public partial class GameController
             return false;
         }
 
-        if (!CanSpendUnitOperation(attacker, availableKredits, out _))
+        float availableOperation;
+        if (!CanSpendUnitOperation(attacker, availableKredits, out availableOperation))
         {
             return false;
         }
@@ -551,6 +552,11 @@ public partial class GameController
         }
 
         CardView flightView = CreateTransientCardView(card);
+        if (flightView == null)
+        {
+            return;
+        }
+
         flightView.SetInteractionEnabled(false);
         flightView.SetDragEnabled(false);
         flightView.SetLayout(

@@ -14,11 +14,16 @@ public class CardMotion : MonoBehaviour
     private Vector3 specialMoveEnd;
     private Quaternion specialMoveStartRotation;
     private Quaternion specialMoveEndRotation;
+    private Vector3 returnStart;
+    private Vector3 returnEnd;
+    private float returnElapsed;
+    private float returnDuration;
     private bool hovered;
     private bool selected;
     private bool hasTargetPosition;
     private bool dragging;
     private bool specialMoveActive;
+    private bool failedReturnActive;
     private bool specialMoveFlips;
     private bool specialMoveHasMid;
     private Vector3 lungeOffset;
@@ -145,6 +150,25 @@ public class CardMotion : MonoBehaviour
         transform.position = fromPosition;
     }
 
+    public void PlayFailedReturn(Vector3 fromPosition, Vector3 toPosition)
+    {
+        returnStart = fromPosition;
+        returnEnd = toPosition;
+        returnStart.y += CardMotionRules.FailedReturnSettleHeight;
+        returnEnd = toPosition;
+        returnDuration = CardMotionRules.FailedReturnSeconds;
+        returnElapsed = 0f;
+        failedReturnActive = true;
+        specialMoveActive = false;
+        specialMoveFlips = false;
+        specialMoveHasMid = false;
+        hasTargetPosition = false;
+        lungeElapsed = 0f;
+        lungeOffset = Vector3.zero;
+        dragging = false;
+        transform.position = fromPosition;
+    }
+
     private void Update()
     {
         if (!specialMoveActive
@@ -168,6 +192,7 @@ public class CardMotion : MonoBehaviour
         float spawnT = Mathf.Clamp01(spawnElapsed / 0.18f);
         float selectedScale = selected ? CardMotionRules.SelectedScaleMultiplier : 1f;
         float hoverScale = hovered ? CardMotionRules.HoverScaleMultiplier : 1f;
+        float hoverLift = hovered ? CardMotionRules.HoverLift : 0f;
         float pulseScale = 1f + Mathf.Sin(pulse * Mathf.PI) * 0.08f;
         transform.localScale = Vector3.Lerp(
             transform.localScale,
@@ -177,6 +202,42 @@ public class CardMotion : MonoBehaviour
         if (!selected && pulse > 0f)
         {
             pulse = Mathf.Max(0f, pulse - Time.deltaTime * 4f);
+        }
+
+        if (failedReturnActive)
+        {
+            returnElapsed += Time.deltaTime;
+            float linearT = Mathf.Clamp01(returnElapsed / Mathf.Max(0.01f, returnDuration));
+            float liftTime = Mathf.Max(0.01f, CardMotionRules.FailedReturnSettleSeconds / returnDuration);
+            float settleTime = 1f - liftTime;
+            float hop;
+            Vector3 path;
+            if (linearT <= liftTime)
+            {
+                float upT = linearT / liftTime;
+                float rise = Mathf.Sin(upT * Mathf.PI * 0.5f);
+                hop = rise * CardMotionRules.FailedReturnSettleHeight;
+                path = Vector3.LerpUnclamped(returnStart, returnEnd, upT * 0.42f);
+            }
+            else
+            {
+                float settleT = (linearT - liftTime) / settleTime;
+                float down = 1f - Mathf.Cos(settleT * Mathf.PI * 0.5f);
+                hop = Mathf.Lerp(CardMotionRules.FailedReturnSettleHeight, 0f, down);
+                path = Vector3.LerpUnclamped(returnStart, returnEnd, 0.42f + down * 0.58f);
+            }
+
+            path.y += hop + Mathf.Sin(Mathf.PI * linearT) * CardMotionRules.FailedReturnHopHeight;
+            transform.position = path;
+            if (linearT >= 1f)
+            {
+                failedReturnActive = false;
+                ResetBasePosition(returnEnd);
+                transform.position = returnEnd;
+                return;
+            }
+
+            return;
         }
 
         if (specialMoveActive)
@@ -229,13 +290,13 @@ public class CardMotion : MonoBehaviour
             float distance = Vector3.Distance(transform.position, targetPosition);
             if (CardMotionRules.ShouldSnapToTarget(distance))
             {
-                transform.position = targetPosition;
+                transform.position = targetPosition + Vector3.up * hoverLift;
                 hasTargetPosition = false;
             }
             else
             {
                 float t = 1f - Mathf.Exp(-CardMotionRules.MoveLerpSpeed * Time.deltaTime);
-                transform.position = Vector3.LerpUnclamped(transform.position, targetPosition, t);
+                transform.position = Vector3.LerpUnclamped(transform.position, targetPosition + Vector3.up * hoverLift, t);
             }
         }
 
@@ -244,14 +305,14 @@ public class CardMotion : MonoBehaviour
             lungeElapsed = Mathf.Max(0f, lungeElapsed - Time.deltaTime);
             if (lungeElapsed <= 0f)
             {
-                transform.position = targetPosition;
+                transform.position = targetPosition + Vector3.up * hoverLift;
                 return;
             }
 
             float t = lungeElapsed / CardMotionRules.AttackLungeReturnSeconds;
             Vector3 lungeTarget = targetPosition + lungeOffset * Mathf.Sin(t * Mathf.PI);
             float lungeT = 1f - Mathf.Exp(-CardMotionRules.MoveLerpSpeed * Time.deltaTime);
-            transform.position = Vector3.LerpUnclamped(transform.position, lungeTarget, lungeT);
+            transform.position = Vector3.LerpUnclamped(transform.position, lungeTarget + Vector3.up * hoverLift, lungeT);
         }
     }
 

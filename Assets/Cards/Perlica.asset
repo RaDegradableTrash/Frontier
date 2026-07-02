@@ -28,6 +28,6 @@ MonoBehaviour:
   addedCardName: "\u5E1D\u6C5F\u53F7\uFF0C\u6E05\u7A7A\u533A\u57DF"
   specialRules:
   - {fileID: 11400000, guid: cbf1e5cbf47c546978a642bca0df44fd, type: 2}
-  artwork: {fileID: 0}
+  artwork: {fileID: 21300000, guid: 0702ed52d1eca4aa29f3916f4145978d, type: 3}
   attack: 3
   defense: 4

@@ -22,7 +22,7 @@ public partial class GameController
             selectedEnemyDeck = DeckArchetype.Endfield;
             BuildDecks();
             DrawOpeningHands();
-            phase = MatchStartRules.PhaseAfterAutoStart();
+            SetGamePhase(MatchStartRules.PhaseAfterAutoStart());
             SetStatus("Opening hand: click cards to mark for mulligan, then Mulligan or Keep Hand.");
             RefreshAllViews();
         }
@@ -95,7 +95,8 @@ public partial class GameController
             mulliganMarkedIds.Clear();
             ClearCardInspectState();
             CancelAllCardPointerInteractions();
-            StartTurn(PlayerSide.Player);
+            phase = GamePhase.PlayerTurn;
+            activeSide = PlayerSide.Player;
             SetStatus($"Mulligan replaced {markedCards.Count} card(s). Your turn.");
             RefreshSceneStatus();
         }
@@ -113,6 +114,10 @@ public partial class GameController
                     ? storedStart
                     : PlayableSceneRules.MulliganHandAnchor;
                 CardView flightView = CreateTransientCardView(card);
+                if (flightView == null)
+                {
+                    continue;
+                }
                 flightView.SetInteractionEnabled(false);
                 flightView.SetDragEnabled(false);
                 flightView.SetLayout(
@@ -192,7 +197,7 @@ public partial class GameController
             mulliganMarkedIds.Clear();
             ClearCardInspectState();
             hasFrontlineController = false;
-            phase = GamePhase.DeckBuilder;
+            SetGamePhase(GamePhase.DeckBuilder);
             SetStatus("Choose a starter deck, then start the match.");
             RefreshAllViews();
         }

@@ -143,7 +143,8 @@ public partial class GameController
             }
 
             hasSupportUnit = true;
-            if (!CanSpendUnitOperation(card, player.Kredits, out _))
+            float availableOperation;
+            if (!CanSpendUnitOperation(card, player.Kredits, out availableOperation))
             {
                 needsKredits = true;
                 continue;
@@ -208,7 +209,8 @@ public partial class GameController
             }
 
             hasFrontlineUnit = true;
-            if (!CanSpendUnitOperation(card, player.Kredits, out _))
+            float availableOperation;
+            if (!CanSpendUnitOperation(card, player.Kredits, out availableOperation))
             {
                 needsKredits = true;
                 continue;

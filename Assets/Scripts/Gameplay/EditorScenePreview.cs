@@ -8,7 +8,7 @@ public class EditorScenePreview : MonoBehaviour
     [SerializeField] private bool showPreview = PlayableSceneRules.EditorPreviewEnabled;
 
     private Transform previewRoot;
-    private bool previewBuilt;
+    private bool refreshing;
 
     private void OnEnable()
     {
@@ -17,11 +17,17 @@ public class EditorScenePreview : MonoBehaviour
 
     private void OnValidate()
     {
+        if (Application.isPlaying)
+        {
+            return;
+        }
+
+        Refresh();
     }
 
-    private void Update()
+    private void OnTransformChildrenChanged()
     {
-        if (!Application.isPlaying && showPreview && (!previewBuilt || previewRoot == null || PreviewChildCountMismatch()))
+        if (!Application.isPlaying && showPreview && !refreshing && previewRoot != null)
         {
             Refresh();
         }
@@ -29,25 +35,27 @@ public class EditorScenePreview : MonoBehaviour
 
     public void Refresh()
     {
-        if (Application.isPlaying)
-        {
-            ClearPreview();
-            return;
-        }
-
-        if (!showPreview)
+        if (Application.isPlaying || refreshing || !showPreview || !isActiveAndEnabled)
         {
             ClearPreview();
             return;
         }
 
         EnsureRoot();
-        ClearPreviewChildren();
-        CreatePreviewHands();
-        CreatePreviewStatus();
-        ApplyTabletopContourBackground();
-        SetPreviewCommandButtons();
-        previewBuilt = true;
+
+        refreshing = true;
+        try
+        {
+            ClearPreviewChildren();
+            CreatePreviewHands();
+            CreatePreviewStatus();
+            ApplyTabletopContourBackground();
+            SetPreviewCommandButtons();
+            }
+        finally
+        {
+            refreshing = false;
+        }
     }
 
     private void EnsureRoot()
@@ -74,7 +82,6 @@ public class EditorScenePreview : MonoBehaviour
 
         DestroyImmediate(existing.gameObject);
         previewRoot = null;
-        previewBuilt = false;
     }
 
     private void ClearPreviewChildren()
@@ -83,7 +90,6 @@ public class EditorScenePreview : MonoBehaviour
         {
             DestroyImmediate(previewRoot.GetChild(i).gameObject);
         }
-        previewBuilt = false;
     }
 
     private void CreatePreviewHands()
@@ -108,38 +114,66 @@ public class EditorScenePreview : MonoBehaviour
         }
     }
 
-    private bool PreviewChildCountMismatch()
-    {
-        return previewRoot != null
-            && previewRoot.childCount != PlayableSceneRules.PreviewPlayerHandSize + PlayableSceneRules.PreviewEnemyHandSize;
+        private void CreatePreviewCard(string cardName, Vector3 position, bool hidden, Color bodyColor)
+        {
+            RuntimeCard previewCard = new RuntimeCard
+            {
+                CardName = cardName,
+                Faction = CardFaction.Endfield,
+                Rarity = CardRarity.Standard,
+                Type = CardType.Unit,
+                Zone = CardZone.Hand,
+                Owner = cardName.StartsWith("Enemy", System.StringComparison.Ordinal) ? PlayerSide.Enemy : PlayerSide.Player,
+                KreditCost = 0,
+                OperationCost = 0,
+                DeploymentCostBonus = 0,
+                CurrentDefense = 1,
+                RulesText = string.Empty
+            };
+
+            string prefabPath = CardView.ResolvePrefabPath(previewCard, true);
+            GameObject prefab = Resources.Load<GameObject>(prefabPath);
+            if (prefab == null)
+            {
+                Debug.LogError($"Missing card prefab '{prefabPath}' for editor preview card {cardName}.");
+                return;
+            }
+
+            GameObject cardObject = Object.Instantiate(prefab);
+            cardObject.name = cardName;
+            cardObject.transform.SetParent(previewRoot, false);
+            cardObject.transform.position = position;
+            cardObject.transform.localScale = Vector3.one * 0.52f;
+
+            CardView view = cardObject.GetComponent<CardView>();
+            if (view == null)
+            {
+                Debug.LogError($"Editor preview card prefab '{prefabPath}' is missing CardView component for {cardName}.");
+                RuntimeSafeDestroy.Destroy(cardObject);
+                return;
+            }
+            view.Initialize(previewCard, null, hidden, true);
+
+            ApplyPreviewTint(view, hidden ? new Color(0.18f, 0.22f, 0.3f) : Color.Lerp(bodyColor, Color.white, 0.35f));
     }
 
-    private void CreatePreviewCard(string cardName, Vector3 position, bool hidden, Color bodyColor)
+    private void ApplyPreviewTint(CardView view, Color color)
     {
-        GameObject card = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        card.name = cardName;
-        card.transform.SetParent(previewRoot, false);
-        card.transform.position = position;
-        card.transform.localScale = new Vector3(0.72f, 0.035f, 1.04f);
-        DisableGeneratedCollider(card.GetComponent<Collider>());
+        if (view == null)
+        {
+            return;
+        }
 
-        MeshRenderer renderer = card.GetComponent<MeshRenderer>();
-        renderer.sharedMaterial = PreviewMaterial(hidden ? new Color(0.08f, 0.1f, 0.16f) : bodyColor);
+        MeshRenderer[] renderers = view.GetComponentsInChildren<MeshRenderer>(true);
+        foreach (MeshRenderer renderer in renderers)
+        {
+            if (renderer == null || renderer.material == null || !renderer.material.HasProperty("_Color"))
+            {
+                continue;
+            }
 
-        CreateCardStrip(card.transform, hidden ? new Color(0.18f, 0.22f, 0.3f) : Color.Lerp(bodyColor, Color.white, 0.35f));
-    }
-
-    private void CreateCardStrip(Transform parent, Color color)
-    {
-        GameObject strip = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        strip.name = "Preview Card Art";
-        strip.transform.SetParent(parent, false);
-        strip.transform.localPosition = new Vector3(0f, 0.62f, 0.05f);
-        strip.transform.localScale = new Vector3(0.8f, 0.08f, 0.36f);
-        DisableGeneratedCollider(strip.GetComponent<Collider>());
-
-        MeshRenderer renderer = strip.GetComponent<MeshRenderer>();
-        renderer.sharedMaterial = PreviewMaterial(color);
+            renderer.material.color = color;
+        }
     }
 
     private void CreatePreviewStatus()
@@ -167,14 +201,6 @@ public class EditorScenePreview : MonoBehaviour
         if (inspector != null)
         {
             inspector.ShowCard(null);
-        }
-    }
-
-    private void DisableGeneratedCollider(Collider generatedCollider)
-    {
-        if (generatedCollider != null)
-        {
-            generatedCollider.enabled = false;
         }
     }
 
@@ -229,10 +255,4 @@ public class EditorScenePreview : MonoBehaviour
         return anchor + Vector3.right * offset;
     }
 
-    private Material PreviewMaterial(Color color)
-    {
-        Material material = new Material(Shader.Find("Standard"));
-        material.color = color;
-        return material;
-    }
 }

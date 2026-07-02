@@ -42,12 +42,27 @@ public class SceneCardGallery : MonoBehaviour
             }
 
             RuntimeCard previewCard = cardData.ToRuntimeCard(PlayerSide.Player);
-            GameObject cardObject = new GameObject($"Gallery_{previewCard.CardName}");
+            string prefabPath = CardView.ResolvePrefabPath(previewCard, true);
+            GameObject prefab = Resources.Load<GameObject>(prefabPath);
+            if (prefab == null)
+            {
+                Debug.LogError($"Missing card prefab '{prefabPath}' for gallery card {previewCard?.CardName ?? "<null>"}.");
+                continue;
+            }
+
+            GameObject cardObject = Object.Instantiate(prefab);
+            cardObject.name = $"Gallery_{previewCard.CardName}";
             cardObject.transform.SetParent(transform, false);
             CardGallerySlot slot = CardGalleryLayout.SlotFor(i, columns);
             cardObject.transform.localPosition = localOrigin + new Vector3(slot.Column * spacingX, 0f, slot.Row * spacingZ);
 
-            CardView view = cardObject.AddComponent<CardView>();
+            CardView view = cardObject.GetComponent<CardView>();
+            if (view == null)
+            {
+                Debug.LogError($"Gallery card prefab '{prefabPath}' is missing CardView component for {previewCard?.CardName ?? "<null>"}.");
+                RuntimeSafeDestroy.Destroy(cardObject);
+                continue;
+            }
             view.Initialize(previewCard, null);
             cardObject.transform.localScale = Vector3.one * previewScale;
         }

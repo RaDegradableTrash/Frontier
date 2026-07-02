@@ -12,11 +12,6 @@ public class BoardAreaClickCatcher : MonoBehaviour
 
     private void OnMouseDown()
     {
-        if (controller == null)
-        {
-            controller = FindObjectOfType<GameController>();
-        }
-
         controller?.HandleBoardAreaClicked();
     }
 }

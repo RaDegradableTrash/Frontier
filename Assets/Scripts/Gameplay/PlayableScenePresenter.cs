@@ -50,30 +50,12 @@ private static bool CanMutateSceneHierarchy
                 return false;
             }
 
-            return !EditorConsistencyCallbackInProgress();
+            return true;
 #else
             return Application.isPlaying;
 #endif
         }
     }
-
-#if UNITY_EDITOR
-    private static bool EditorConsistencyCallbackInProgress()
-    {
-        var stack = new System.Diagnostics.StackTrace();
-        for (int i = 1; i < stack.FrameCount; i++)
-        {
-            var method = stack.GetFrame(i)?.GetMethod();
-            var name = method?.Name ?? string.Empty;
-            if (name.Contains("OnValidate") || name.Contains("CheckConsistency") || name.Contains("OnBeforeTransformParentChanged") || name.Contains("OnTransformParentChanged") || name.Contains("OnTransformChildrenChanged"))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-#endif
 
     public void EnableRuntimePresentation()
     {
@@ -94,7 +76,7 @@ private static bool CanMutateSceneHierarchy
         }
 
 #if UNITY_EDITOR
-        if (EditorConsistencyCallbackInProgress() || UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode)
+        if (UnityEditor.EditorApplication.isPlayingOrWillChangePlaymode)
         {
             return;
         }

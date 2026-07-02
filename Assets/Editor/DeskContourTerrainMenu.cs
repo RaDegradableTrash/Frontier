@@ -250,6 +250,168 @@ public static class DeskContourTerrainMenu
         Selection.activeGameObject = tabletop;
     }
 
+    [MenuItem("Frontier/Generate/Sci-Fi Contour Terrain/调试牌桌背景(暗底白线状态)")]
+    public static void DebugTabletopBackdropState()
+    {
+        GameObject tabletop = GameObject.Find("DesktopQuad");
+        if (tabletop == null)
+        {
+            EditorUtility.DisplayDialog(
+                "桌布未找到",
+                "当前场景中未找到名为 DesktopQuad 的对象。",
+                "OK");
+            return;
+        }
+
+        DeskContourTerrainGenerator generator = tabletop.GetComponent<DeskContourTerrainGenerator>();
+        if (generator == null)
+        {
+            generator = tabletop.AddComponent<DeskContourTerrainGenerator>();
+        }
+
+        Renderer renderer = tabletop.GetComponent<Renderer>();
+        if (renderer != null)
+        {
+            string materialName = "(null)";
+            if (renderer.sharedMaterial != null)
+            {
+                materialName = renderer.sharedMaterial.name;
+            }
+
+            Debug.Log("[DeskContour][DebugState] DesktopQuad active=" + tabletop.activeInHierarchy + ", enabled=" + renderer.enabled + ", material=" + materialName);
+            if (renderer.sharedMaterial != null)
+            {
+                string shaderName = "(null)";
+                if (renderer.sharedMaterial.shader != null)
+                {
+                    shaderName = renderer.sharedMaterial.shader.name;
+                }
+
+                bool hasMainTex = renderer.sharedMaterial.mainTexture != null;
+                Debug.Log("[DeskContour][DebugState] shader=" + shaderName + ", hasMainTex=" + hasMainTex);
+                Debug.Log("[DeskContour][DebugState] queue=" + renderer.sharedMaterial.renderQueue + ", color=" + (renderer.sharedMaterial.HasProperty("_Color") ? renderer.sharedMaterial.GetColor("_Color") : Color.white));
+            }
+        }
+        else
+        {
+            Debug.Log("[DeskContour][DebugState] DesktopQuad 没有 Renderer");
+        }
+
+        Debug.Log("[DeskContour][DebugState] style=" + generator.CurrentContourStyle + ", latestSeed=" + generator.LatestSeed);
+        Debug.Log("[DeskContour][DebugState] hasGeneratedTexture=" + generator.HasGeneratedTexture);
+
+        Selection.activeGameObject = tabletop;
+    }
+
+    [MenuItem("Frontier/Generate/Sci-Fi Contour Terrain/应用到牌桌背景(白线增强)")]
+    public static void ApplyReferenceBackdropPresetWhiter()
+    {
+        ApplyReferenceBackdropPresetProfileToTabletop(
+            "Apply Reference Match Backdrop Contour (White) On Tabletop",
+            generator =>
+            {
+                generator.ApplyReferenceMatchBackdropWhiteLinePreset();
+            });
+    }
+
+    [MenuItem("Frontier/Generate/Sci-Fi Contour Terrain/牌桌背景恢复可见性")]
+    public static void RestoreTabletopBackdropVisibility()
+    {
+        GameObject tabletop = GameObject.Find("DesktopQuad");
+        if (tabletop == null)
+        {
+            EditorUtility.DisplayDialog(
+                "桌布未找到",
+                "当前场景中未找到名为 DesktopQuad 的对象。",
+                "OK");
+            return;
+        }
+
+        DeskContourTerrainGenerator generator = tabletop.GetComponent<DeskContourTerrainGenerator>();
+        if (generator == null)
+        {
+            generator = tabletop.AddComponent<DeskContourTerrainGenerator>();
+        }
+
+        Undo.RegisterFullObjectHierarchyUndo(tabletop, "Restore Desk Terrain Visibility");
+        generator.ApplyReferenceMatchBackdropWhiteLineDarkPreset();
+        generator.ForceRebuildAndRepairTabletopBackdropVisibility();
+        Selection.activeGameObject = tabletop;
+    }
+
+    [MenuItem("Frontier/Generate/Sci-Fi Contour Terrain/强制重建并显示牌桌背景")]
+    public static void ForceRebuildAndShowTabletopBackdrop()
+    {
+        GameObject tabletop = GameObject.Find("DesktopQuad");
+        if (tabletop == null)
+        {
+            EditorUtility.DisplayDialog(
+                "桌布未找到",
+                "当前场景中未找到名为 DesktopQuad 的对象。",
+                "OK");
+            return;
+        }
+
+        DeskContourTerrainGenerator generator = tabletop.GetComponent<DeskContourTerrainGenerator>();
+        if (generator == null)
+        {
+            generator = tabletop.AddComponent<DeskContourTerrainGenerator>();
+        }
+
+        Undo.RegisterFullObjectHierarchyUndo(tabletop, "Force Rebuild Desk Terrain Visibility");
+        generator.ForceRebuildAndRepairTabletopBackdropVisibility();
+        Selection.activeGameObject = tabletop;
+    }
+
+    [MenuItem("Frontier/Generate/Sci-Fi Contour Terrain/极速强制桌布可见")]
+    public static void ForceMakeBackdropVisibleNow()
+    {
+        GameObject tabletop = GameObject.Find("DesktopQuad");
+        if (tabletop == null)
+        {
+            EditorUtility.DisplayDialog(
+                "桌布未找到",
+                "当前场景中未找到名为 DesktopQuad 的对象。",
+                "OK");
+            return;
+        }
+
+        DeskContourTerrainGenerator generator = tabletop.GetComponent<DeskContourTerrainGenerator>();
+        if (generator == null)
+        {
+            generator = tabletop.AddComponent<DeskContourTerrainGenerator>();
+        }
+
+        Undo.RegisterFullObjectHierarchyUndo(tabletop, "Make Desk Terrain Visible");
+        generator.ForceMakeBackdropVisible();
+        Selection.activeGameObject = tabletop;
+    }
+
+    [MenuItem("Frontier/Generate/Sci-Fi Contour Terrain/最终修复牌桌背景显示（推荐）")]
+    public static void RecoverTabletopBackdropVisibilityNow()
+    {
+        GameObject tabletop = GameObject.Find("DesktopQuad");
+        if (tabletop == null)
+        {
+            EditorUtility.DisplayDialog(
+                "桌布未找到",
+                "当前场景中未找到名为 DesktopQuad 的对象。",
+                "OK");
+            return;
+        }
+
+        DeskContourTerrainGenerator generator = tabletop.GetComponent<DeskContourTerrainGenerator>();
+        if (generator == null)
+        {
+            generator = tabletop.AddComponent<DeskContourTerrainGenerator>();
+        }
+
+        Undo.RegisterFullObjectHierarchyUndo(tabletop, "Recover Desk Terrain Visibility");
+        generator.ApplyReferenceMatchBackdropWhiteLineDarkPreset();
+        generator.ForceRebuildAndRepairTabletopBackdropVisibility();
+        Selection.activeGameObject = tabletop;
+    }
+
     [MenuItem("Frontier/Generate/Sci-Fi Contour Terrain/回放牌桌背景最近种子")]
     public static void ReplayTabletopSeed()
     {
@@ -317,6 +479,14 @@ public static class DeskContourTerrainMenu
         ApplyReferenceBackdropPresetProfileToTabletop(
             "Apply Reference Match Backdrop Contour Preset (Reference Image Exact) On Tabletop",
             generator => generator.ApplyReferenceMatchBackdropPresetReferenceImageExact());
+    }
+
+    [MenuItem("Frontier/Generate/Sci-Fi Contour Terrain/应用到牌桌背景(白线增强-暗底)")]
+    public static void ApplyReferenceBackdropPresetWhiteLineDarkToTabletop()
+    {
+        ApplyReferenceBackdropPresetProfileToTabletop(
+            "Apply Reference Match Backdrop White Line (Dark Base) Preset On Tabletop",
+            generator => generator.ApplyReferenceMatchBackdropWhiteLineDarkPreset());
     }
 
     [MenuItem("Frontier/Generate/Sci-Fi Contour Terrain/应用预设/参考图（牌桌版）/平衡风格")]
@@ -473,7 +643,7 @@ public static class DeskContourTerrainMenu
 
         ApplyReferenceBackdropPresetTweakIntensity(
             "Tweak Reference Match Backdrop Contour On Tabletop",
-            generator => generator.TweakReferenceMatchBackdropMild());
+            target => target.TweakReferenceMatchBackdropMild());
         Selection.activeGameObject = tabletop;
     }
 
@@ -522,6 +692,7 @@ public static class DeskContourTerrainMenu
 
         Undo.RegisterFullObjectHierarchyUndo(tabletop, undoLabel);
         applyTweak(generator);
+        generator.ForceRebuildAndRepairTabletopBackdropVisibility();
 
         Selection.activeGameObject = tabletop;
     }
@@ -547,6 +718,7 @@ public static class DeskContourTerrainMenu
         Undo.RegisterFullObjectHierarchyUndo(tabletop, undoLabel);
         generator.ApplyTabletopSciFiPresetStyle(style, true);
         generator.Generate();
+        generator.ForceRebuildAndRepairTabletopBackdropVisibility();
         Selection.activeGameObject = tabletop;
     }
 
@@ -570,6 +742,7 @@ public static class DeskContourTerrainMenu
 
         Undo.RegisterFullObjectHierarchyUndo(tabletop, undoLabel);
         generator.ApplyTabletopStyleAndRandomize(style);
+        generator.ForceRebuildAndRepairTabletopBackdropVisibility();
         Selection.activeGameObject = tabletop;
     }
 
@@ -595,6 +768,7 @@ public static class DeskContourTerrainMenu
 
         Undo.RegisterFullObjectHierarchyUndo(tabletop, undoLabel);
         applyPreset(generator);
+        generator.ForceRebuildAndRepairTabletopBackdropVisibility();
         Selection.activeGameObject = tabletop;
     }
 }

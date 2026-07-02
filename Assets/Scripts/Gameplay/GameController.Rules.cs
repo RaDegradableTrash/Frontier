@@ -117,6 +117,47 @@ public partial class GameController
         return side == PlayerSide.Player ? CardZone.PlayerSupport : CardZone.EnemySupport;
     }
 
+    private int BoardColumnCount()
+    {
+        return board != null ? board.BoardColumnsForAllRows : 7;
+    }
+
+    private int BoardRowCount()
+    {
+        return board != null ? board.BoardRows : 5;
+    }
+
+    private bool IsInsideBoard(int row, int col)
+    {
+        return row >= 0 && row < BoardRowCount() && col >= 0 && col < BoardColumnCount();
+    }
+
+    private SlotInteract TryGetSlot(int col, int row)
+    {
+        return board != null ? board.GetSlotInRow(col, row) : null;
+    }
+
+    private IEnumerable<SlotInteract> AllBoardSlots()
+    {
+        for (int row = 0; row < BoardRowCount(); row++)
+        {
+            for (int col = 0; col < BoardColumnCount(); col++)
+            {
+                SlotInteract slot = TryGetSlot(col, row);
+                if (slot != null)
+                {
+                    yield return slot;
+                }
+            }
+        }
+    }
+
+    private bool IsBoardCombatUnit(RuntimeCard card)
+    {
+        return card != null
+            && (card.Zone == CardZone.PlayerSupport || card.Zone == CardZone.EnemySupport || card.Zone == CardZone.Frontline);
+    }
+
     private int UnitScore(RuntimeCard card)
     {
         if (card == null)
@@ -162,7 +203,7 @@ public partial class GameController
             }
 
             int score = UnitScore(card);
-            if (card.HasKeyword(CardKeyword.Mobilize) && (!hasFrontlineController || frontlineController == PlayerSide.Enemy))
+            if (card.HasKeyword(CardKeyword.Mobilize))
             {
                 score += 5;
             }
@@ -183,7 +224,7 @@ public partial class GameController
         int bestScore = int.MinValue;
         foreach (RuntimeCard card in cardSlots.Keys)
         {
-            if (card.Owner != PlayerSide.Enemy || card.Zone != CardZone.Frontline || !CanAttack(card, enemy.Kredits))
+            if (card.Owner != PlayerSide.Enemy || !IsBoardCombatUnit(card) || !CanAttack(card, enemy.Kredits))
             {
                 continue;
             }
@@ -213,7 +254,6 @@ public partial class GameController
         }
 
         PlayerSide defender = attacker.Owner == PlayerSide.Player ? PlayerSide.Enemy : PlayerSide.Player;
-        SlotZone supportZone = SupportZoneFor(defender);
 
         SlotInteract bestUnit = null;
         int bestScore = int.MinValue;
@@ -224,35 +264,37 @@ public partial class GameController
             bestScore = TargetPriority(frontline.Occupant) + 6;
         }
 
-        int count = board.SupportColumns;
-        for (int x = 0; x < count; x++)
+        for (int x = 0; x < BoardColumnCount(); x++)
         {
-            SlotInteract slot = board.GetSlot(x, supportZone);
-            if (slot == null || !slot.IsOccupied || slot.Occupant.Owner != defender)
+            for (int z = 0; z < BoardRowCount(); z++)
             {
-                continue;
-            }
+                SlotInteract slot = TryGetSlot(x, z);
+                if (slot == null || !slot.IsOccupied || slot.Occupant.Owner != defender)
+                {
+                    continue;
+                }
 
-            if (IsProtectedByAdjacentGuard(slot, defender) && !slot.Occupant.HasKeyword(CardKeyword.Guard))
-            {
-                continue;
-            }
+                if (IsProtectedByAdjacentGuard(slot, defender) && !slot.Occupant.HasKeyword(CardKeyword.Guard))
+                {
+                    continue;
+                }
 
-            if (slot.Occupant.HasKeyword(CardKeyword.Smokescreen))
-            {
-                continue;
-            }
+                if (slot.Occupant.HasKeyword(CardKeyword.Smokescreen))
+                {
+                    continue;
+                }
 
-            int score = TargetPriority(slot.Occupant);
-            if (slot.Occupant.CurrentDefense <= attacker.Attack)
-            {
-                score += 8;
-            }
+                int score = TargetPriority(slot.Occupant);
+                if (slot.Occupant.CurrentDefense <= attacker.Attack)
+                {
+                    score += 8;
+                }
 
-            if (score > bestScore)
-            {
-                bestUnit = slot;
-                bestScore = score;
+                if (score > bestScore)
+                {
+                    bestUnit = slot;
+                    bestScore = score;
+                }
             }
         }
 
@@ -288,10 +330,8 @@ public partial class GameController
     {
         SlotInteract best = null;
         int bestScore = int.MinValue;
-        int count = zone == SlotZone.Frontline ? board.FrontlineColumns : board.SupportColumns;
-        for (int x = 0; x < count; x++)
+        foreach (SlotInteract slot in AllBoardSlots())
         {
-            SlotInteract slot = board.GetSlot(x, zone);
             if (slot == null || !slot.IsOccupied || slot.Occupant.Owner != owner)
             {
                 continue;
@@ -341,10 +381,8 @@ public partial class GameController
     {
         SlotInteract best = null;
         int bestScore = int.MinValue;
-        int count = zone == SlotZone.Frontline ? board.FrontlineColumns : board.SupportColumns;
-        for (int x = 0; x < count; x++)
+        foreach (SlotInteract slot in AllBoardSlots())
         {
-            SlotInteract slot = board.GetSlot(x, zone);
             if (slot == null || !slot.IsOccupied || slot.Occupant.Owner != owner)
             {
                 continue;
@@ -419,10 +457,8 @@ public partial class GameController
 
     private SlotInteract FindEmptySlot(SlotZone zone)
     {
-        int count = zone == SlotZone.Frontline ? board.FrontlineColumns : board.SupportColumns;
-        for (int x = 0; x < count; x++)
+        foreach (SlotInteract slot in AllBoardSlots())
         {
-            SlotInteract slot = board.GetSlot(x, zone);
             if (slot != null && !slot.IsOccupied && !BoardTargetRules.IsHeadquartersSlot(slot))
             {
                 return slot;
@@ -434,10 +470,8 @@ public partial class GameController
 
     private SlotInteract FindOccupiedSlot(SlotZone zone, PlayerSide owner)
     {
-        int count = zone == SlotZone.Frontline ? board.FrontlineColumns : board.SupportColumns;
-        for (int x = 0; x < count; x++)
+        foreach (SlotInteract slot in AllBoardSlots())
         {
-            SlotInteract slot = board.GetSlot(x, zone);
             if (slot != null && slot.IsOccupied && slot.Occupant.Owner == owner && !slot.Occupant.HasKeyword(CardKeyword.Smokescreen))
             {
                 return slot;
@@ -449,10 +483,8 @@ public partial class GameController
 
     private SlotInteract FindGuardSlot(SlotZone zone, PlayerSide owner)
     {
-        int count = zone == SlotZone.Frontline ? board.FrontlineColumns : board.SupportColumns;
-        for (int x = 0; x < count; x++)
+        foreach (SlotInteract slot in AllBoardSlots())
         {
-            SlotInteract slot = board.GetSlot(x, zone);
             if (slot != null && slot.IsOccupied && GuardProtectionRules.ProtectsSupportTargets(slot.Occupant, owner))
             {
                 return slot;
@@ -469,30 +501,14 @@ public partial class GameController
 
     private void UpdateFrontlineControl()
     {
-        bool hasPlayerUnit = false;
-        bool hasEnemyUnit = false;
-        for (int x = 0; x < board.FrontlineColumns; x++)
+        hasFrontlineController = false;
+        frontlineController = PlayerSide.Player;
+        foreach (SlotInteract slot in AllBoardSlots())
         {
-            SlotInteract slot = board.GetSlot(x, SlotZone.Frontline);
             if (slot != null && slot.IsOccupied)
             {
                 RemoveSmokescreen(slot.Occupant);
-                if (slot.Occupant.Owner == PlayerSide.Player)
-                {
-                    hasPlayerUnit = true;
-                }
-                else
-                {
-                    hasEnemyUnit = true;
-                }
             }
-        }
-
-        FrontlineControlResult control = FrontlineControlRules.Resolve(hasPlayerUnit, hasEnemyUnit);
-        hasFrontlineController = control.HasController;
-        if (control.HasController)
-        {
-            frontlineController = control.Controller;
         }
     }
 
@@ -510,21 +526,21 @@ public partial class GameController
 
         if (player.HeadquartersHealth <= 0 && enemy.HeadquartersHealth <= 0)
         {
-            phase = GamePhase.GameOver;
+            SetGamePhase(GamePhase.GameOver);
             SetStatus("Draw. Both headquarters are destroyed.");
             ClearSelection();
             StopAllCoroutines();
         }
         else if (enemy.HeadquartersHealth <= 0)
         {
-            phase = GamePhase.GameOver;
+            SetGamePhase(GamePhase.GameOver);
             SetStatus("Victory. Enemy headquarters destroyed.");
             ClearSelection();
             StopAllCoroutines();
         }
         else if (player.HeadquartersHealth <= 0)
         {
-            phase = GamePhase.GameOver;
+            SetGamePhase(GamePhase.GameOver);
             SetStatus("Defeat. Your headquarters was destroyed.");
             ClearSelection();
             StopAllCoroutines();

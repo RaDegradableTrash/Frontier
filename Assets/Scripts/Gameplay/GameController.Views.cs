@@ -472,11 +472,7 @@ public partial class GameController
 
         private void RefreshSceneStatus()
         {
-            if (sceneStatusDisplay == null)
-            {
-                sceneStatusDisplay = FindObjectOfType<SceneStatusDisplay>();
-            }
-
+            EnsureSceneUiReferences();
             if (sceneStatusDisplay == null)
             {
                 return;
@@ -487,10 +483,7 @@ public partial class GameController
 
         private void RefreshSceneActionPrompt()
         {
-            if (sceneActionPrompt == null)
-            {
-                sceneActionPrompt = FindObjectOfType<SceneActionPrompt>();
-            }
+            EnsureSceneUiReferences();
 
             if (sceneActionPrompt == null)
             {
@@ -504,10 +497,7 @@ public partial class GameController
 
         private void RefreshSceneInspector()
         {
-            if (sceneCardInspector == null)
-            {
-                sceneCardInspector = FindObjectOfType<SceneCardInspector>();
-            }
+            EnsureSceneUiReferences();
 
             if (sceneCardInspector == null)
             {
@@ -536,8 +526,26 @@ public partial class GameController
 
             if (centerInspectView == null)
             {
-                GameObject cardObject = new GameObject($"CenterInspect_{centerInspectCard.CardName}");
-                centerInspectView = cardObject.AddComponent<CardView>();
+                string prefabPath = CardView.ResolvePrefabPath(centerInspectCard, true);
+                GameObject cardObject = Resources.Load<GameObject>(prefabPath);
+                if (cardObject == null)
+                {
+                    Debug.LogError($"Missing center-inspect card prefab '{prefabPath}' for card {centerInspectCard?.CardName ?? "<null>"}.");
+                    return;
+                }
+                else
+                {
+                    cardObject = Object.Instantiate(cardObject);
+                }
+
+                cardObject.name = $"CenterInspect_{centerInspectCard.CardName}";
+                centerInspectView = cardObject.GetComponent<CardView>();
+                if (centerInspectView == null)
+                {
+                    Debug.LogError($"Center-inspect card prefab '{prefabPath}' missing CardView component for {centerInspectCard?.CardName ?? "<null>"}.");
+                    RuntimeSafeDestroy.Destroy(cardObject);
+                    return;
+                }
                 centerInspectView.Initialize(centerInspectCard, this, false, true);
                 transientCardViews.Add(centerInspectView);
             }
@@ -603,10 +611,7 @@ public partial class GameController
 
         private void RefreshSceneDeckSummary()
         {
-            if (sceneDeckSummary == null)
-            {
-                sceneDeckSummary = FindObjectOfType<SceneDeckSummary>();
-            }
+            EnsureSceneUiReferences();
 
             if (sceneDeckSummary == null)
             {
@@ -622,6 +627,29 @@ public partial class GameController
             sceneDeckSummary.UpdateSummary(
                 "Endfield Deck",
                 "干员、指令、反制。");
+        }
+
+        private void EnsureSceneUiReferences()
+        {
+            if (sceneStatusDisplay == null)
+            {
+                sceneStatusDisplay = FindObjectOfType<SceneStatusDisplay>();
+            }
+
+            if (sceneActionPrompt == null)
+            {
+                sceneActionPrompt = FindObjectOfType<SceneActionPrompt>();
+            }
+
+            if (sceneCardInspector == null)
+            {
+                sceneCardInspector = FindObjectOfType<SceneCardInspector>();
+            }
+
+            if (sceneDeckSummary == null)
+            {
+                sceneDeckSummary = FindObjectOfType<SceneDeckSummary>();
+            }
         }
 
         private void RefreshSceneCommandButtons()
@@ -663,6 +691,10 @@ public partial class GameController
                 bool hidden = side == PlayerSide.Enemy;
                 RuntimeCard runtimeCard = hand[i];
                 CardView view = GetOrCreateCardView(runtimeCard, hidden, true);
+                if (view == null)
+                {
+                    continue;
+                }
                 Quaternion rotation = mulliganPresentation ? Quaternion.identity : HandRotation(side, i, hand.Count);
                 bool centerInspect = false;
                 Vector3 position = centerInspect
@@ -830,6 +862,10 @@ public partial class GameController
             {
                 bool hidden = state.Side == PlayerSide.Enemy;
                 CardView view = GetOrCreateCardView(state.Countermeasures[i], hidden, false);
+                if (view == null)
+                {
+                    continue;
+                }
                 Quaternion rotation = state.Side == PlayerSide.Enemy ? Quaternion.Euler(0f, 180f, 0f) : Quaternion.identity;
                 view.SetLayout(
                     CountermeasurePosition(state.Side, i, state.Countermeasures.Count, z),
@@ -890,6 +926,10 @@ public partial class GameController
                 }
 
                 CardView view = GetOrCreateCardView(card, false, false);
+                if (view == null)
+                {
+                    continue;
+                }
                 view.SetLayout(
                     pair.Value.transform.position + Vector3.up * PlayableSceneRules.BoardCardHeight,
                     BoardCardScaleFor(card),
@@ -946,20 +986,62 @@ public partial class GameController
 
         private CardView CreateCardView(RuntimeCard card, bool hidden, bool handPrefab)
         {
-            GameObject cardObject = new GameObject($"Card_{card.CardName}");
-            CardView view = cardObject.AddComponent<CardView>();
+            string prefabPath = CardView.ResolvePrefabPath(card, handPrefab);
+            GameObject cardObject = Resources.Load<GameObject>(prefabPath);
+            if (cardObject == null)
+            {
+                Debug.LogError($"Missing card prefab '{prefabPath}' for card {card?.CardName ?? "<null>"}.");
+                return null;
+            }
+            else
+            {
+                cardObject = Object.Instantiate(cardObject);
+            }
+
+            cardObject.name = $"Card_{card.CardName}";
+            CardView view = cardObject.GetComponent<CardView>();
+            if (view == null)
+            {
+                Debug.LogError($"Card prefab '{prefabPath}' missing CardView component for card {card?.CardName ?? "<null>"}.");
+                RuntimeSafeDestroy.Destroy(cardObject);
+                return null;
+            }
             view.Initialize(card, this, hidden, handPrefab);
             cardViews.Add(view);
             return view;
         }
 
-        private CardView CreateTransientCardView(RuntimeCard card)
+        private CardView CreateTransientCardView(RuntimeCard card, bool handPrefab)
         {
-            GameObject cardObject = new GameObject($"PlayedOrder_{card.CardName}");
-            CardView view = cardObject.AddComponent<CardView>();
-            view.Initialize(card, this, false);
+            string prefabPath = CardView.ResolvePrefabPath(card, handPrefab);
+            GameObject cardObject = Resources.Load<GameObject>(prefabPath);
+            if (cardObject == null)
+            {
+                Debug.LogError($"Missing transient card prefab '{prefabPath}' for card {card?.CardName ?? "<null>"}.");
+                return null;
+            }
+            else
+            {
+                cardObject = Object.Instantiate(cardObject);
+            }
+
+            cardObject.name = $"PlayedOrder_{card.CardName}";
+            CardView view = cardObject.GetComponent<CardView>();
+            if (view == null)
+            {
+                Debug.LogError($"Transient card prefab '{prefabPath}' missing CardView component for card {card?.CardName ?? "<null>"}.");
+                RuntimeSafeDestroy.Destroy(cardObject);
+                return null;
+            }
+            view.Initialize(card, this, false, handPrefab);
             transientCardViews.Add(view);
             return view;
+        }
+
+        private CardView CreateTransientCardView(RuntimeCard card)
+        {
+            bool handPrefab = card != null && card.Zone == CardZone.Hand;
+            return CreateTransientCardView(card, handPrefab);
         }
 
         private void ResyncSelectionVisuals()

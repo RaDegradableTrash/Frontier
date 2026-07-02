@@ -1,6 +1,5 @@
 using System;
 using UnityEngine;
-using UnityObject = UnityEngine.Object;
 
 [ExecuteAlways]
 [DisallowMultipleComponent]
@@ -9,6 +8,7 @@ public class DeskContourTerrainGenerator : MonoBehaviour
 {
     private const string SavedReferenceBackdropPresetKey = "DeskContourTerrainGenerator.ReferenceBackdropPreset.V1";
     private const int ReferenceBackdropStableSeed = 982741;
+    private const int ReferenceBackdropRenderQueue = 2050;
 
     public enum ContourStyle
     {
@@ -52,6 +52,8 @@ public class DeskContourTerrainGenerator : MonoBehaviour
 
     private static readonly int MainTexProperty = Shader.PropertyToID("_MainTex");
     private static readonly int BaseMapProperty = Shader.PropertyToID("_BaseMap");
+    private static readonly int _BaseMapProperty = BaseMapProperty;
+    private static readonly int BaseTexProperty = Shader.PropertyToID("_BaseTex");
     private static readonly int ColorProperty = Shader.PropertyToID("_Color");
     private static readonly int EmissionColorProperty = Shader.PropertyToID("_EmissionColor");
     private static readonly int BaseColorProperty = Shader.PropertyToID("_BaseColor");
@@ -105,9 +107,15 @@ public class DeskContourTerrainGenerator : MonoBehaviour
 
     private void OnEnable()
     {
-        if (!tablePresetApplied && gameObject != null && gameObject.name == "DesktopQuad")
+        if (gameObject != null && gameObject.name == "DesktopQuad"
+            && (!tablePresetApplied || !HasGeneratedTexture || contourStyle != ContourStyle.ReferenceMatchBackdrop))
         {
-            ApplyReferenceMatchBackdropPresetReferenceImageMatchTarget();
+            ApplyReferenceMatchBackdropWhiteLineDarkPreset();
+        }
+        else if (gameObject != null && gameObject.name == "DesktopQuad"
+            && contourStyle == ContourStyle.ReferenceMatchBackdrop)
+        {
+            EnsureBackdropMaterialVisibleStrongly();
         }
 
         if (autoRegenerate)
@@ -146,6 +154,7 @@ public class DeskContourTerrainGenerator : MonoBehaviour
         {
             SetLatestSeed(seed);
             EnsureTargets();
+            RepairTabletopBackdropTransform();
             BuildHeightField();
             ApplyTexture(BuildTexture());
         }
@@ -163,7 +172,7 @@ public class DeskContourTerrainGenerator : MonoBehaviour
             ApplyReferenceMatchBackdropPresetReferenceImageMatchTarget();
         }
 
-        ApplySeed(GetRandomSeed());
+        ApplySeed((int)GetRandomSeed());
         Generate();
     }
 
@@ -194,6 +203,17 @@ public class DeskContourTerrainGenerator : MonoBehaviour
     {
         string payload = GetCurrentPresetPayload();
         Debug.Log($"[DeskContourTerrainGenerator] {payload}");
+    }
+
+    private static bool IsUniversalRenderPipelineActive()
+    {
+        var pipeline = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
+        if (pipeline == null)
+        {
+            return false;
+        }
+
+        return pipeline.GetType().Name.Contains("UniversalRenderPipelineAsset", StringComparison.Ordinal);
     }
 
     [ContextMenu("Save Current Tabletop Parameters")]
@@ -250,6 +270,7 @@ public class DeskContourTerrainGenerator : MonoBehaviour
 
     private void ApplyReferenceMatchBackdropPresetToDesktopQuadInternal(Action<DeskContourTerrainGenerator> applyPresetToTarget)
     {
+        Debug.Log($"[DeskContour] ApplyToDesktopQuadInternal requested on {gameObject?.name}");
         GameObject desk = GameObject.Find("DesktopQuad");
         if (desk == null)
         {
@@ -259,6 +280,7 @@ public class DeskContourTerrainGenerator : MonoBehaviour
 
         if (desk == gameObject)
         {
+            Debug.Log("[DeskContour] Using current component for DesktopQuad");
             applyPresetToTarget(this);
             return;
         }
@@ -270,6 +292,7 @@ public class DeskContourTerrainGenerator : MonoBehaviour
         }
 
         applyPresetToTarget(deskGenerator);
+        Debug.Log($"[DeskContour] Applying to DesktopQuad component. tablePreset={deskGenerator.tablePresetApplied}, contourStyle={deskGenerator.contourStyle}");
         deskGenerator.Generate();
     }
 
@@ -283,7 +306,7 @@ public class DeskContourTerrainGenerator : MonoBehaviour
         tablePresetApplied = true;
         if (forceRandomSeed)
         {
-            ApplySeed(GetRandomSeed());
+            ApplySeed((int)GetRandomSeed());
         }
 
         ApplyTabletopSciFiPresetStyle(contourStyle, true);
@@ -451,13 +474,17 @@ public class DeskContourTerrainGenerator : MonoBehaviour
     [ContextMenu("Apply Reference Match Backdrop Preset")]
     public void ApplyReferenceMatchBackdropPreset()
     {
-        ApplyReferenceMatchBackdropPresetReferenceImageExact();
+        ApplyReferenceMatchBackdropPresetReferenceImageMatchTarget();
     }
 
     [ContextMenu("Apply Reference Match Backdrop Preset (Reference Image)")]
     public void ApplyReferenceMatchBackdropPresetReferenceImage()
     {
+        Debug.Log("[DeskContour] ApplyReferenceMatchBackdropPresetReferenceImage() called");
         ApplyReferenceMatchBackdropPresetReferenceImageExact();
+        contourStyle = ContourStyle.ReferenceMatchBackdrop;
+        tablePresetApplied = true;
+        Generate();
     }
 
     [ContextMenu("Apply Reference Match Backdrop Preset (Reference Image Baseline)")]
@@ -470,28 +497,35 @@ public class DeskContourTerrainGenerator : MonoBehaviour
     public void ApplyReferenceMatchBackdropPresetReferenceImageBaselineAndRandomize()
     {
         ApplyReferenceMatchBackdropPresetStyle(0, false);
-        ApplySeed(GetRandomSeed());
+        ApplySeed((int)GetRandomSeed());
         Generate();
     }
 
     [ContextMenu("Apply Reference Match Backdrop Preset (Reference Image Match Target + Random Seed)")]
     public void ApplyReferenceMatchBackdropPresetReferenceImageMatchTargetAndRandomize()
     {
+        Debug.Log("[DeskContour] Execute Reference Match Backdrop Preset (Reference Image Match Target + Random Seed)");
         ApplyReferenceMatchBackdropPresetReferenceImageMatchTarget();
-        ApplySeed(GetRandomSeed());
+        tablePresetApplied = true;
+        ApplySeed((int)GetRandomSeed());
+        autoRegenerate = true;
         Generate();
+        Debug.Log($"[DeskContour] Seed={seed}, contourColor={contourColor}, bgLow={backgroundColorLow}, bgHigh={backgroundColorHigh}, contrast={contrast}");
     }
 
     [ContextMenu("Apply Reference Match Backdrop Preset (Reference Image Exact)")]
     public void ApplyReferenceMatchBackdropPresetReferenceImageExact()
     {
         ApplyReferenceMatchBackdropPresetReferenceImageExactInternal(true);
+        contourStyle = ContourStyle.ReferenceMatchBackdrop;
     }
 
     [ContextMenu("Apply Reference Match Backdrop Preset (Reference Image Match Target)")]
     public void ApplyReferenceMatchBackdropPresetReferenceImageMatchTarget()
     {
+        Debug.Log("[DeskContour] ApplyReferenceMatchBackdropPresetReferenceImageMatchTarget() called");
         ApplyReferenceMatchBackdropPresetReferenceImageExactInternal(false);
+        contourStyle = ContourStyle.ReferenceMatchBackdrop;
         contourLayers = 34;
         lineWidth = 0.022f;
         lineSoftness = 1.08f;
@@ -506,6 +540,8 @@ public class DeskContourTerrainGenerator : MonoBehaviour
         glowColor = new Color(0.20f, 0.22f, 0.28f, 0.08f);
         contrast = 1.06f;
         emissiveBoost = 0.25f;
+        tablePresetApplied = true;
+        autoRegenerate = true;
 
         Generate();
     }
@@ -535,10 +571,16 @@ public class DeskContourTerrainGenerator : MonoBehaviour
         glowColor = new Color(0.24f, 0.28f, 0.34f, 0.10f);
         contrast = 1.03f;
         emissiveBoost = 0.28f;
+        tablePresetApplied = true;
 
         if (generate)
         {
             Generate();
+        }
+        else
+        {
+            contourStyle = ContourStyle.ReferenceMatchBackdrop;
+            autoRegenerate = true;
         }
     }
 
@@ -574,6 +616,159 @@ public class DeskContourTerrainGenerator : MonoBehaviour
             lineWidthScale: 0.97f,
             rimRadiusAdd: -0.01f,
             rimIntensityScale: 1.05f);
+    }
+
+    [ContextMenu("Apply Reference Match Backdrop White Line Preset")]
+    public void ApplyReferenceMatchBackdropWhiteLinePreset()
+    {
+        ApplyReferenceMatchBackdropPresetReferenceImageExact();
+        contourLayers = 36;
+        lineWidth = 0.018f;
+        lineSoftness = 0.92f;
+        contourBias = 0.10f;
+        contourColor = Color.white;
+        glowColor = new Color(1f, 1f, 1f, 0.45f);
+        baseScale = 103f;
+        flowScale = 3.08f;
+        rimRadius = 1.52f;
+        rimIntensity = 1.04f;
+        contrast = 1.04f;
+        emissiveBoost = 0.46f;
+        backgroundColorLow = new Color(0.004f, 0.005f, 0.007f, 1f);
+        backgroundColorHigh = new Color(0.020f, 0.024f, 0.032f, 1f);
+        contourStyle = ContourStyle.ReferenceMatchBackdrop;
+        autoRegenerate = true;
+        tablePresetApplied = true;
+        Generate();
+    }
+
+    [ContextMenu("Apply Reference Match Backdrop White Line (Dark Base) Preset")]
+    public void ApplyReferenceMatchBackdropWhiteLineDarkPreset()
+    {
+        ApplyReferenceMatchBackdropPresetReferenceImageExact();
+        contourLayers = 40;
+        lineWidth = 0.016f;
+        lineSoftness = 0.88f;
+        contourBias = 0.10f;
+        contourColor = Color.white;
+        glowColor = new Color(1f, 1f, 1f, 0.38f);
+        baseScale = 98f;
+        flowScale = 2.95f;
+        rimRadius = 1.60f;
+        rimIntensity = 1.08f;
+        contrast = 1.08f;
+        emissiveBoost = 0.32f;
+        backgroundColorLow = new Color(0.0012f, 0.0018f, 0.0025f, 1f);
+        backgroundColorHigh = new Color(0.010f, 0.013f, 0.018f, 1f);
+        contourStyle = ContourStyle.ReferenceMatchBackdrop;
+        autoRegenerate = true;
+        tablePresetApplied = true;
+        Generate();
+    }
+
+    [ContextMenu("Force Rebuild Tabletop Backdrop Visibility")]
+    public void ForceRebuildTabletopBackdropVisibility()
+    {
+        EnsureTargets();
+        RepairTabletopBackdropTransform();
+
+        if (contourStyle != ContourStyle.ReferenceMatchBackdrop || !tablePresetApplied || !HasGeneratedTexture)
+        {
+            ApplyReferenceMatchBackdropPresetReferenceImageMatchTarget();
+            return;
+        }
+
+        ApplyTexture(generatedTexture);
+    }
+
+    [ContextMenu("Force Rebuild And Repair Tabletop Backdrop Visibility")]
+    public void ForceRebuildAndRepairTabletopBackdropVisibility()
+    {
+        ForceRebuildTabletopBackdropVisibility();
+        EnsureBackdropMaterialVisibleStrongly();
+    }
+
+    public void RepairTabletopBackdropVisibility()
+    {
+        ForceRebuildTabletopBackdropVisibility();
+        EnsureBackdropMaterialVisibleStrongly();
+    }
+
+    [ContextMenu("Force Make Backdrop Visible")]
+    public void ForceMakeBackdropVisible()
+    {
+        EnsureBackdropMaterialVisibleStrongly();
+    }
+
+    private void EnsureBackdropMaterialVisibleStrongly()
+    {
+        Renderer renderer = GetComponent<Renderer>();
+        if (renderer == null)
+        {
+            return;
+        }
+
+        EnsureTargets();
+        RepairTabletopBackdropTransform();
+
+        if (!HasGeneratedTexture)
+        {
+            if (contourStyle != ContourStyle.ReferenceMatchBackdrop || !tablePresetApplied)
+            {
+                ApplyReferenceMatchBackdropWhiteLineDarkPreset();
+            }
+            else
+            {
+                Generate();
+            }
+        }
+
+        if (!HasGeneratedTexture || generatedTexture == null)
+        {
+            return;
+        }
+
+        if (renderer.sharedMaterial == null || !HasBackdropDrawableTexture(renderer.sharedMaterial, generatedTexture))
+        {
+            Shader fallback = Shader.Find("Sprites/Default");
+            if (fallback == null)
+            {
+                fallback = Shader.Find("Unlit/Texture");
+            }
+
+            if (fallback == null)
+            {
+                fallback = Shader.Find("Unlit/Transparent");
+            }
+
+            if (fallback == null)
+            {
+                Debug.LogWarning($"[DeskContour] 无可用回退材质用于恢复桌布可见性: {name}");
+                return;
+            }
+
+            Material fallbackMaterial = new Material(fallback);
+            SetMaterialTexture(fallbackMaterial, generatedTexture);
+            ApplyTransparentMaterialState(fallbackMaterial, true);
+            ApplyBackdropOpaqueMaterialState(fallbackMaterial);
+            renderer.sharedMaterial = fallbackMaterial;
+            generatedMaterial = fallbackMaterial;
+        }
+        else
+        {
+            RebindBackdropMaterialTextures(renderer, renderer.sharedMaterial, generatedTexture);
+            generatedMaterial = renderer.sharedMaterial;
+        }
+
+        ForceBackdropMaterialVisible(renderer, renderer.sharedMaterial, true);
+        NormalizeBackdropMaterialRenderState(renderer, renderer.sharedMaterial, true);
+        ApplyBackdropForegroundState(renderer.sharedMaterial, true);
+        ClearBackdropMaterialKeywordNoise(renderer.sharedMaterial, true);
+        renderer.sharedMaterial.mainTexture = generatedTexture;
+        renderer.sortingOrder = Mathf.Max(renderer.sortingOrder, 1000);
+        ApplyBackdropVisibilityHardening(renderer, renderer.sharedMaterial, true);
+        renderer.enabled = true;
+        renderer.gameObject.SetActive(true);
     }
 
     [ContextMenu("Reset to Reference Match Backdrop Preset")]
@@ -751,7 +946,7 @@ public class DeskContourTerrainGenerator : MonoBehaviour
     public void ApplyReferenceMatchBackdropPresetAndRandomize()
     {
         ApplyReferenceMatchBackdropPresetReferenceImageExactInternal(false);
-        ApplySeed(GetRandomSeed());
+        ApplySeed((int)GetRandomSeed());
         Generate();
     }
 
@@ -818,7 +1013,7 @@ public class DeskContourTerrainGenerator : MonoBehaviour
     public void ApplyTabletopStyleAndRandomize(ContourStyle style)
     {
         ApplyTabletopSciFiPresetStyle(style, true);
-        ApplySeed(GetRandomSeed());
+        ApplySeed((int)GetRandomSeed());
         Generate();
     }
 
@@ -845,7 +1040,7 @@ public class DeskContourTerrainGenerator : MonoBehaviour
             contourStyle = ContourStyle.ReferenceMatchBackdrop;
         }
 
-        ApplySeed(GetRandomSeed());
+        ApplySeed((int)GetRandomSeed());
         Generate();
     }
 
@@ -1084,6 +1279,12 @@ public class DeskContourTerrainGenerator : MonoBehaviour
         }
 
         Color[] pixels = new Color[resolution * resolution];
+        float minOutputChannel = 1f;
+        float maxOutputChannel = 0f;
+        float maxContour = 0f;
+        float backdropLineCoverage = 0f;
+        float backdropLineIntensity = 0f;
+        float backdropLinePixelCount = 0f;
         float contourStep = 1f / contourLayers;
         Vector2 center = new Vector2(0.5f, 0.5f);
 
@@ -1131,34 +1332,66 @@ public class DeskContourTerrainGenerator : MonoBehaviour
                 pixel.a = Mathf.Clamp01(pixel.a + contour * 0.75f + rim * 0.06f + emissiveBoost * 0.02f);
                 pixel = Color.Lerp(pixel, pixel * (0.6f + rim * 2.4f), emissiveBoost * 0.6f);
                 pixel = Color.Lerp(pixel, new Color(contourColor.r, contourColor.g, contourColor.b, 0.05f), glowFlow * 0.12f);
-                if (contourStyle == ContourStyle.ReferenceMatchBackdrop)
-                {
-                    float pixelLuma = 0.2126f * pixel.r + 0.7152f * pixel.g + 0.0722f * pixel.b;
-                    Color monochrome = new Color(pixelLuma, pixelLuma, pixelLuma * 1.02f, pixel.a);
-                    float neutralTone = Mathf.Pow(Mathf.Clamp01(pixelLuma), 0.94f);
-                    Color neutral = new Color(neutralTone, neutralTone, neutralTone * 0.99f, pixel.a);
-                    pixel = Color.Lerp(pixel, neutral, 0.98f);
-                    pixel = Color.Lerp(pixel, monochrome, 0.35f);
-                    pixel *= new Color(0.74f, 0.74f, 0.78f, 0.88f);
-                    pixel.a = Mathf.Lerp(0.93f, pixel.a, 0.22f);
-                }
                 pixel.a *= Mathf.Lerp(0.78f, 1f, rim);
                 if (contourStyle == ContourStyle.ReferenceMatchBackdrop)
                 {
-                    float radialFade = Mathf.SmoothStep(0.0f, 1f, radial);
-                    pixel = Color.Lerp(pixel, pixel * 0.82f, radialFade * 0.18f);
+                    float contourSignal = Mathf.Pow(Mathf.Clamp01(contour), 1.22f);
+                    float baseLuma = Mathf.Lerp(0.004f, 0.028f, Mathf.Clamp01(h));
+                    float detail = Mathf.SmoothStep(0f, 1f, haze);
+                    float rimBlend = Mathf.Clamp01(1f - radial * 1.2f);
+
+                    float back = Mathf.Lerp(baseLuma, 0.012f + baseLuma * 0.8f, rimBlend);
+                    Color backdropBase = new Color(back, back, back + 0.0012f, 1f);
+
+                    Color lineCore = Color.Lerp(
+                        new Color(1f, 1f, 1f, 1f),
+                        new Color(contourColor.r, contourColor.g, contourColor.b, 1f),
+                        0.22f);
+                    float lineMask = Mathf.SmoothStep(0f, 1f, contourSignal);
+                    pixel = Color.Lerp(backdropBase, lineCore, lineMask);
+                    pixel = Color.Lerp(pixel, Color.white, Mathf.Pow(lineMask, 12f) * 0.35f);
+
+                    float lineGlow = Mathf.Pow(glowFlow, 1.5f) * (0.20f + rim * 0.25f) * Mathf.Lerp(0.55f, 1f, lineMask);
+                    pixel += lineGlow * new Color(glowColor.r, glowColor.g, glowColor.b, 0f);
+                    pixel = Color.Lerp(pixel, Color.black, detail * 0.06f + (1f - rimBlend) * 0.12f);
+                    pixel = new Color(
+                        Mathf.Clamp01(pixel.r),
+                        Mathf.Clamp01(pixel.g),
+                        Mathf.Clamp01(pixel.b),
+                        1f);
+                    backdropLineCoverage += contourSignal;
+                    backdropLineIntensity += lineMask;
+                    if (lineMask > 0.12f)
+                    {
+                        backdropLinePixelCount += 1f;
+                    }
                 }
                 else
                 {
                     pixel = Color.Lerp(pixel, pixel * 0.58f, radial * 0.45f);
                 }
 
+                if (contourStyle == ContourStyle.ReferenceMatchBackdrop)
+                {
+                    pixel.a = 1f;
+                }
+
+                float sample = (pixel.r + pixel.g + pixel.b) / 3f;
+                minOutputChannel = Mathf.Min(minOutputChannel, sample);
+                maxOutputChannel = Mathf.Max(maxOutputChannel, sample);
+                maxContour = Mathf.Max(maxContour, sample);
                 pixels[i] = pixel;
             }
         }
 
         generatedTexture.SetPixels(pixels);
         generatedTexture.Apply(false, false);
+        if (contourStyle == ContourStyle.ReferenceMatchBackdrop)
+        {
+            float pixelCount = resolution * (float)resolution;
+            Debug.Log($"[DeskContour] Backdrop line coverage: avgSignal={backdropLineCoverage / pixelCount:F4}, avgMask={backdropLineIntensity / pixelCount:F4}, strongPixelRatio={backdropLinePixelCount / pixelCount:F4}");
+        }
+        Debug.Log($"[DeskContour] Generated texture stats: minRGB={minOutputChannel:F4}, maxRGB={maxOutputChannel:F4}, maxSample={maxContour:F4}");
         return generatedTexture;
     }
 
@@ -1167,6 +1400,7 @@ public class DeskContourTerrainGenerator : MonoBehaviour
         SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
         if (spriteRenderer != null)
         {
+            spriteRenderer.enabled = true;
             if (generatedSprite == null || generatedSprite.texture != texture)
             {
                 if (generatedSprite != null)
@@ -1188,10 +1422,22 @@ public class DeskContourTerrainGenerator : MonoBehaviour
             return;
         }
 
+        renderer.enabled = true;
+        renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        renderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         renderer.receiveShadows = false;
 
-        Shader shader = ChooseShader(renderer.sharedMaterial);
+        bool forceOpaqueBackdrop = contourStyle == ContourStyle.ReferenceMatchBackdrop;
+        Shader shader = forceOpaqueBackdrop
+            ? ChooseReferenceBackdropShader(renderer.sharedMaterial)
+            : ChooseShader(renderer.sharedMaterial);
+        if (shader == null)
+        {
+            Debug.LogError($"[DeskContour] Shader unavailable, skip texture apply. name={name}, forceOpaque={forceOpaqueBackdrop}");
+            return;
+        }
         Material sourceMaterial = renderer.sharedMaterial;
         if (sourceMaterial == null || sourceMaterial.shader != shader)
         {
@@ -1202,10 +1448,62 @@ public class DeskContourTerrainGenerator : MonoBehaviour
             sourceMaterial = new Material(sourceMaterial);
         }
 
+        if (!sourceMaterial.HasProperty(MainTexProperty) && !sourceMaterial.HasProperty(BaseMapProperty) && !sourceMaterial.HasProperty(BaseTexProperty))
+        {
+            Shader fallback = ChooseBackdropFallbackShader(sourceMaterial.shader);
+            if (fallback != null && fallback != sourceMaterial.shader)
+            {
+                sourceMaterial = new Material(fallback);
+            }
+        }
+
         sourceMaterial.name = $"{name}_ContourMap_Material";
-        sourceMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
         SetMaterialTexture(sourceMaterial, texture);
-        ApplyTransparentMaterialState(sourceMaterial);
+        sourceMaterial.mainTextureOffset = Vector2.zero;
+        sourceMaterial.mainTextureScale = Vector2.one;
+        ApplyTransparentMaterialState(sourceMaterial, forceOpaqueBackdrop);
+        if (forceOpaqueBackdrop)
+        {
+            ApplyBackdropOpaqueMaterialState(sourceMaterial);
+        }
+        if (!HasBackdropDrawableTexture(sourceMaterial, texture))
+        {
+            Shader fallback = ChooseBackdropFallbackShader(sourceMaterial.shader);
+            if (fallback != null)
+            {
+                sourceMaterial = new Material(fallback);
+                sourceMaterial.name = $"{name}_ContourMap_FallbackMaterial";
+                SetMaterialTexture(sourceMaterial, texture);
+                ApplyTransparentMaterialState(sourceMaterial, forceOpaqueBackdrop);
+                if (forceOpaqueBackdrop)
+                {
+                    ApplyBackdropOpaqueMaterialState(sourceMaterial);
+                }
+            }
+        }
+        if (!HasBackdropDrawableTexture(sourceMaterial, texture))
+        {
+            Shader fallback = Shader.Find("Sprites/Default");
+            if (fallback != null)
+            {
+                sourceMaterial = new Material(fallback);
+                sourceMaterial.name = $"{name}_ContourMap_SpriteFallback";
+                SetMaterialTexture(sourceMaterial, texture);
+                ApplyTransparentMaterialState(sourceMaterial, forceOpaqueBackdrop);
+                if (forceOpaqueBackdrop)
+                {
+                    ApplyBackdropOpaqueMaterialState(sourceMaterial);
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"[DeskContour] 无法为 {name} 找到可用的回退材质，尝试直接使用当前材质");
+            }
+        }
+
+        ForceBackdropMaterialVisible(renderer, sourceMaterial, forceOpaqueBackdrop);
+        ClearBackdropMaterialKeywordNoise(sourceMaterial, forceOpaqueBackdrop);
+        ApplyBackdropForegroundState(sourceMaterial, forceOpaqueBackdrop);
 
         if (sourceMaterial.HasProperty(ColorProperty))
         {
@@ -1224,51 +1522,715 @@ public class DeskContourTerrainGenerator : MonoBehaviour
 
         generatedMaterial = sourceMaterial;
         renderer.sharedMaterial = generatedMaterial;
-    }
+        renderer.sharedMaterial.mainTexture = texture;
+        renderer.material = sourceMaterial;
+        RepairTabletopBackdropMaterialState();
+        ApplyBackdropForegroundState(generatedMaterial, forceOpaqueBackdrop);
+        ApplyBackdropVisibilityHardening(renderer, generatedMaterial, forceOpaqueBackdrop);
+        Debug.Log($"[DeskContour] ApplyTexture finished: {name}, style={contourStyle}, shader={sourceMaterial.shader.name}, queue={sourceMaterial.renderQueue}, texRes={texture.width}x{texture.height}");
 
-    private static void ApplyTransparentMaterialState(Material material)
-    {
-        if (material == null || !material.HasProperty("_Mode"))
+        if (forceOpaqueBackdrop)
         {
-            if (material != null && material.HasProperty("_Surface"))
+            float? texAlpha = null;
+            if (generatedTexture != null)
             {
-                material.SetFloat("_Surface", 1f);
+                try
+                {
+                    Color firstPixel = generatedTexture.GetPixel(0, 0);
+                    texAlpha = firstPixel.a;
+                }
+                catch
+                {
+                }
             }
 
-            if (material != null && material.HasProperty("_Blend"))
+            bool hasMainTex = generatedMaterial != null && generatedMaterial.HasProperty(MainTexProperty) && generatedMaterial.mainTexture != null;
+            bool hasBaseMap = generatedMaterial != null && generatedMaterial.HasProperty(BaseMapProperty) && generatedMaterial.GetTexture(BaseMapProperty) != null;
+            bool hasColor = generatedMaterial != null && generatedMaterial.HasProperty(_BaseColorProperty);
+            bool hasMainColor = generatedMaterial != null && generatedMaterial.HasProperty(ColorProperty);
+            bool hasMode = generatedMaterial != null && generatedMaterial.HasProperty("_Mode");
+            float? mode = null;
+            if (generatedMaterial != null && hasMode)
+            {
+                try
+                {
+                    mode = generatedMaterial.GetFloat("_Mode");
+                }
+                catch
+                {
+                }
+            }
+
+            Debug.Log($"[DeskContour] Backdrop material check: hasMainTex={hasMainTex}, hasBaseMap={hasBaseMap}, hasColor={hasColor}, hasMainColor={hasMainColor}, hasMode={hasMode}, mode={mode}, firstPixelAlpha={texAlpha}, queue={renderer.sharedMaterial.renderQueue}, cull={renderer.sharedMaterial.HasProperty("_Cull")}, doubleSided={renderer.sharedMaterial.HasProperty("_DoubleSided")}, shader={generatedMaterial.shader?.name}");
+        }
+    }
+
+    private static void ApplyBackdropForegroundState(Material material, bool forceOpaqueBackdrop)
+    {
+        if (material == null || !forceOpaqueBackdrop)
+        {
+            return;
+        }
+
+        // 牌桌专用兜底：提高可见优先级并避免被场景深度状态压掉
+        material.renderQueue = ReferenceBackdropRenderQueue;
+
+        if (material.HasProperty("_ZWrite"))
+        {
+            material.SetInt("_ZWrite", 0);
+        }
+
+        if (material.HasProperty("_ZTest"))
+        {
+            material.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+        }
+
+        if (material.HasProperty("ZTest"))
+        {
+            material.SetInt("ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+        }
+
+        if (material.HasProperty("_SrcBlend"))
+        {
+            material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+        }
+
+        if (material.HasProperty("_DstBlend"))
+        {
+            material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
+        }
+
+        if (material.HasProperty("_Cull"))
+        {
+            material.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        if (material.HasProperty("_CullMode"))
+        {
+            material.SetInt("_CullMode", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        if (material.HasProperty("Cull"))
+        {
+            material.SetInt("Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+    }
+
+    private static void ApplyTransparentMaterialState(Material material, bool forceOpaqueBackdrop)
+    {
+        if (material == null)
+        {
+            return;
+        }
+
+        if (material.HasProperty("_Mode"))
+        {
+            material.SetFloat("_Mode", 3f);
+            if (material.HasProperty("_SrcBlend"))
+            {
+                material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            }
+
+            if (material.HasProperty("_DstBlend"))
+            {
+                material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            }
+
+            if (material.HasProperty("_ZWrite"))
+            {
+                material.SetInt("_ZWrite", 0);
+            }
+
+            if (material.HasProperty("_Cull"))
+            {
+                material.SetInt("_Cull", 0);
+            }
+
+            material.DisableKeyword("_ALPHATEST_ON");
+            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            material.EnableKeyword("_ALPHABLEND_ON");
+        }
+        else if (material.HasProperty("_Surface"))
+        {
+            material.SetFloat("_Surface", 1f);
+            if (material.HasProperty("_Blend"))
             {
                 material.SetFloat("_Blend", 0f);
             }
 
-            if (material != null && material.HasProperty("_AlphaClip"))
+            if (material.HasProperty("_AlphaClip"))
             {
-                material.SetFloat("_AlphaClip", 0f);
+                material.SetInt("_AlphaClip", 0);
             }
 
-            if (material != null && material.HasProperty(_BaseColorProperty))
+            if (material.HasProperty("_SrcBlend"))
             {
-                material.SetColor(_BaseColorProperty, Color.white);
+                material.SetInt("_SrcBlend", 1);
             }
 
-            if (material != null && material.HasProperty(ColorProperty))
+            if (material.HasProperty("_DstBlend"))
             {
-                material.SetColor(ColorProperty, Color.white);
+                material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            }
+
+            if (material.HasProperty("_ZWrite"))
+            {
+                material.SetInt("_ZWrite", 0);
+            }
+
+            if (material.HasProperty("_Cull"))
+            {
+                material.SetInt("_Cull", 0);
             }
 
             material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             material.DisableKeyword("_SURFACE_TYPE_OPAQUE");
-            material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        }
+
+        material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+    }
+
+    private static void ApplyBackdropOpaqueMaterialState(Material material)
+    {
+        if (material == null)
+        {
             return;
         }
 
-        material.SetFloat("_Mode", 3f);
-        material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        material.SetInt("_ZWrite", 0);
-        material.EnableKeyword("_ALPHABLEND_ON");
+        if (material.HasProperty("_Mode"))
+        {
+            material.SetFloat("_Mode", 0f);
+            if (material.HasProperty("_SrcBlend"))
+            {
+                material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+            }
+
+            if (material.HasProperty("_DstBlend"))
+            {
+                material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
+            }
+
+            if (material.HasProperty("_ZWrite"))
+            {
+                material.SetInt("_ZWrite", 1);
+            }
+        }
+        else if (material.HasProperty("_Surface"))
+        {
+            material.SetFloat("_Surface", 0f);
+            if (material.HasProperty("_Blend"))
+            {
+                material.SetFloat("_Blend", 0f);
+            }
+
+            if (material.HasProperty("_SrcBlend"))
+            {
+                material.SetInt("_SrcBlend", 1);
+            }
+
+            if (material.HasProperty("_DstBlend"))
+            {
+                material.SetInt("_DstBlend", 0);
+            }
+
+            if (material.HasProperty("_ZWrite"))
+            {
+                material.SetInt("_ZWrite", 1);
+            }
+
+            material.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.EnableKeyword("_SURFACE_TYPE_OPAQUE");
+        }
+
+        if (material.HasProperty("_AlphaClip"))
+        {
+            material.SetInt("_AlphaClip", 0);
+        }
+
+        if (material.HasProperty("_Cull"))
+        {
+            material.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        if (material.HasProperty("_CullMode"))
+        {
+            material.SetInt("_CullMode", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        if (material.HasProperty("Cull"))
+        {
+            material.SetInt("Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        if (material.HasProperty("_DoubleSided"))
+        {
+            material.SetFloat("_DoubleSided", 1f);
+        }
+
+        if (material.HasProperty("_DoubleSidedEnable"))
+        {
+            material.SetFloat("_DoubleSidedEnable", 1f);
+        }
+
+        material.renderQueue = ReferenceBackdropRenderQueue;
+    }
+
+    private static void RebindBackdropMaterialTextures(Renderer renderer, Material material, Texture2D texture)
+    {
+        if (material == null || texture == null)
+        {
+            return;
+        }
+
+        if (material.HasProperty(BaseMapProperty))
+        {
+            material.SetTexture(BaseMapProperty, texture);
+        }
+
+        if (material.HasProperty(MainTexProperty))
+        {
+            material.SetTexture(MainTexProperty, texture);
+        }
+
+        material.mainTexture = texture;
+
+        if (renderer != null)
+        {
+            renderer.sharedMaterial = material;
+        }
+    }
+
+    private static bool HasBackdropDrawableTexture(Material material, Texture2D texture)
+    {
+        if (material == null)
+        {
+            return false;
+        }
+
+        if (material.mainTexture == texture)
+        {
+            return true;
+        }
+
+        return (material.HasProperty(MainTexProperty) && material.GetTexture(MainTexProperty) == texture)
+            || (material.HasProperty(BaseMapProperty) && material.GetTexture(BaseMapProperty) == texture)
+            || (material.HasProperty(BaseTexProperty) && material.GetTexture(BaseTexProperty) == texture);
+    }
+
+    private static Shader ChooseBackdropFallbackShader(Shader currentShader)
+    {
+        bool isUrp = IsUniversalRenderPipelineActive();
+        if (isUrp)
+        {
+            Shader urpUnlit = Shader.Find("Universal Render Pipeline/Unlit");
+            if (urpUnlit != null)
+            {
+                return urpUnlit;
+            }
+
+            Shader urpUnlitSimple = Shader.Find("Universal Render Pipeline/Unlit (Simple Lit)");
+            if (urpUnlitSimple != null)
+            {
+                return urpUnlitSimple;
+            }
+        }
+
+        Shader sprites = Shader.Find("Sprites/Default");
+        if (sprites != null)
+        {
+            return sprites;
+        }
+
+        Shader unlitTexture = Shader.Find("Unlit/Texture");
+        if (unlitTexture != null)
+        {
+            return unlitTexture;
+        }
+
+        Shader unlitTransparent = Shader.Find("Unlit/Transparent");
+        if (unlitTransparent != null)
+        {
+            return unlitTransparent;
+        }
+
+        Shader standard = Shader.Find("Standard");
+        if (standard != null)
+        {
+            return standard;
+        }
+
+        return currentShader;
+    }
+
+    private static void ClearBackdropMaterialKeywordNoise(Material material, bool forceOpaqueBackdrop)
+    {
+        if (material == null)
+        {
+            return;
+        }
+
+        if (forceOpaqueBackdrop)
+        {
+            material.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.DisableKeyword("_SURFACE_TYPE_OPAQUE");
+            material.EnableKeyword("_SURFACE_TYPE_OPAQUE");
+            material.DisableKeyword("_ALPHABLEND_ON");
+            material.DisableKeyword("_ALPHATEST_ON");
+            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            return;
+        }
+
+        material.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        material.DisableKeyword("_SURFACE_TYPE_OPAQUE");
+        material.DisableKeyword("_ALPHABLEND_ON");
         material.DisableKeyword("_ALPHATEST_ON");
         material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-        material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        material.DisableKeyword("_SURFACE_TYPE_OPAQUE");
+    }
+
+    private static void ForceBackdropMaterialVisible(Renderer renderer, Material material, bool forceOpaqueBackdrop)
+    {
+        if (renderer == null || material == null)
+        {
+            return;
+        }
+
+        renderer.enabled = true;
+        renderer.gameObject.SetActive(true);
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+        renderer.allowOcclusionWhenDynamic = false;
+        renderer.sortingOrder = forceOpaqueBackdrop ? 2000 : 1;
+
+        if (material.HasProperty("_Color"))
+        {
+            Color color = material.GetColor("_Color");
+            material.SetColor("_Color", new Color(color.r, color.g, color.b, 1f));
+        }
+
+        if (material.HasProperty(_BaseColorProperty))
+        {
+            Color baseColor = material.GetColor(_BaseColorProperty);
+            material.SetColor(_BaseColorProperty, new Color(baseColor.r, baseColor.g, baseColor.b, 1f));
+        }
+
+        if (material.HasProperty("_Cull"))
+        {
+            material.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        if (material.HasProperty("_CullMode"))
+        {
+            material.SetInt("_CullMode", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        material.renderQueue = forceOpaqueBackdrop
+            ? ReferenceBackdropRenderQueue
+            : (int)UnityEngine.Rendering.RenderQueue.Transparent;
+    }
+
+    private static void ApplyBackdropVisibilityHardening(Renderer renderer, Material material, bool forceOpaqueBackdrop)
+    {
+        if (renderer == null || material == null)
+        {
+            return;
+        }
+
+        renderer.enabled = true;
+        renderer.gameObject.SetActive(true);
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+        renderer.allowOcclusionWhenDynamic = false;
+        renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        renderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        renderer.sortingOrder = forceOpaqueBackdrop ? 2000 : Mathf.Max(renderer.sortingOrder, 1);
+
+        if (material.HasProperty(_BaseColorProperty))
+        {
+            Color baseColor = material.GetColor(_BaseColorProperty);
+            material.SetColor(_BaseColorProperty, new Color(baseColor.r, baseColor.g, baseColor.b, 1f));
+        }
+
+        if (material.HasProperty(ColorProperty))
+        {
+            Color color = material.GetColor(ColorProperty);
+            material.SetColor(ColorProperty, new Color(color.r, color.g, color.b, 1f));
+        }
+
+        if (material.HasProperty("_ZWrite"))
+        {
+            material.SetInt("_ZWrite", 0);
+        }
+
+        if (material.HasProperty("_ZTest"))
+        {
+            material.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+        }
+
+        if (material.HasProperty("ZTest"))
+        {
+            material.SetInt("ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+        }
+
+        if (material.HasProperty("_Cull"))
+        {
+            material.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        if (material.HasProperty("_CullMode"))
+        {
+            material.SetInt("_CullMode", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        if (material.HasProperty("Cull"))
+        {
+            material.SetInt("Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        material.renderQueue = forceOpaqueBackdrop
+            ? ReferenceBackdropRenderQueue
+            : (int)UnityEngine.Rendering.RenderQueue.Transparent;
+    }
+
+    private static void NormalizeBackdropMaterialRenderState(Renderer renderer, Material material, bool forceOpaqueBackdrop)
+    {
+        if (renderer == null || material == null)
+        {
+            return;
+        }
+
+        renderer.enabled = true;
+        renderer.gameObject.SetActive(true);
+        renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        renderer.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+        renderer.allowOcclusionWhenDynamic = false;
+
+        if (material.HasProperty("_MainTex"))
+        {
+            material.SetTextureOffset("_MainTex", Vector2.zero);
+            material.SetTextureScale("_MainTex", Vector2.one);
+        }
+
+        if (material.HasProperty("_BaseMap"))
+        {
+            material.SetTextureOffset("_BaseMap", Vector2.zero);
+            material.SetTextureScale("_BaseMap", Vector2.one);
+        }
+
+        if (material.HasProperty("_Cull"))
+        {
+            material.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        if (material.HasProperty("_CullMode"))
+        {
+            material.SetInt("_CullMode", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        if (material.HasProperty("_DoubleSided"))
+        {
+            material.SetFloat("_DoubleSided", 1f);
+        }
+
+        if (material.HasProperty("_DoubleSidedEnable"))
+        {
+            material.SetFloat("_DoubleSidedEnable", 1f);
+        }
+
+        if (material.HasProperty("Cull"))
+        {
+            material.SetInt("Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        if (material.HasProperty("_Cull"))
+        {
+            material.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        if (material.HasProperty("_CullMode"))
+        {
+            material.SetInt("_CullMode", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        material.renderQueue = forceOpaqueBackdrop
+            ? ReferenceBackdropRenderQueue
+            : (int)UnityEngine.Rendering.RenderQueue.Transparent;
+    }
+
+    private void RepairTabletopBackdropMaterialState()
+    {
+        RepairTabletopBackdropTransform();
+        Renderer renderer = GetComponent<Renderer>();
+        if (renderer == null || renderer.sharedMaterial == null)
+        {
+            return;
+        }
+
+        bool forceOpaqueBackdrop = contourStyle == ContourStyle.ReferenceMatchBackdrop;
+        if (forceOpaqueBackdrop)
+        {
+            ApplyBackdropOpaqueMaterialState(renderer.sharedMaterial);
+        }
+        else
+        {
+            ApplyTransparentMaterialState(renderer.sharedMaterial, forceOpaqueBackdrop);
+        }
+        NormalizeBackdropMaterialRenderState(renderer, renderer.sharedMaterial, forceOpaqueBackdrop);
+        ClearBackdropMaterialKeywordNoise(renderer.sharedMaterial, forceOpaqueBackdrop);
+        if (generatedTexture != null)
+        {
+            RebindBackdropMaterialTextures(renderer, renderer.sharedMaterial, generatedTexture);
+            ForceBackdropMaterialVisible(renderer, renderer.sharedMaterial, forceOpaqueBackdrop);
+        }
+
+        ApplyBackdropForegroundState(renderer.sharedMaterial, forceOpaqueBackdrop);
+        ApplyBackdropVisibilityHardening(renderer, renderer.sharedMaterial, forceOpaqueBackdrop);
+    }
+
+    private void RepairTabletopBackdropTransform()
+    {
+        if (gameObject == null)
+        {
+            return;
+        }
+
+        gameObject.SetActive(true);
+        Vector3 scale = transform.localScale;
+        transform.localScale = new Vector3(
+            Mathf.Max(0.01f, Mathf.Abs(scale.x)),
+            Mathf.Max(0.01f, Mathf.Abs(scale.y)),
+            Mathf.Max(0.01f, Mathf.Abs(scale.z)));
+
+        if (string.Equals(gameObject.name, "DesktopQuad", StringComparison.Ordinal))
+        {
+            Vector3 angles = transform.eulerAngles;
+            if (Mathf.Abs(Mathf.DeltaAngle(angles.x, 90f)) > 1f
+                || Mathf.Abs(Mathf.DeltaAngle(angles.y, 0f)) > 1f
+                || Mathf.Abs(Mathf.DeltaAngle(angles.z, 0f)) > 1f)
+            {
+                transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            }
+        }
+
+        Renderer renderer = GetComponent<Renderer>();
+        if (renderer != null)
+        {
+            renderer.enabled = true;
+        }
+    }
+
+    private static Shader ChooseReferenceBackdropShader(Material currentMaterial)
+    {
+        bool isUrp = IsUniversalRenderPipelineActive();
+        Shader urpUnlit = isUrp ? Shader.Find("Universal Render Pipeline/Unlit") : null;
+        if (urpUnlit != null)
+        {
+            return urpUnlit;
+        }
+
+        Shader sprites = Shader.Find("Sprites/Default");
+        if (sprites != null)
+        {
+            return sprites;
+        }
+
+        Shader unlitTexture = Shader.Find("Unlit/Texture");
+        if (unlitTexture != null)
+        {
+            return unlitTexture;
+        }
+
+        Shader unlitTransparent = Shader.Find("Unlit/Transparent");
+        if (unlitTransparent != null)
+        {
+            return unlitTransparent;
+        }
+
+        if (currentMaterial != null && currentMaterial.shader != null)
+        {
+            string name = currentMaterial.shader.name;
+            if (name.Contains("Sprites/Default", StringComparison.Ordinal) ||
+                name.Contains("Unlit/Texture", StringComparison.Ordinal) ||
+                name.Contains("Universal Render Pipeline/Unlit", StringComparison.Ordinal))
+            {
+                return currentMaterial.shader;
+            }
+        }
+
+        return ChooseBackdropShader(currentMaterial);
+    }
+
+    private static Shader ChooseBackdropShader(Material currentMaterial)
+    {
+        bool isUrp = IsUniversalRenderPipelineActive();
+        if (currentMaterial != null && currentMaterial.shader != null && currentMaterial.shader.name.Contains("Universal Render Pipeline/Unlit", StringComparison.Ordinal))
+        {
+            return isUrp ? currentMaterial.shader : null;
+        }
+
+        if (currentMaterial != null && currentMaterial.shader != null && currentMaterial.shader.name.Contains("Sprites/Default", StringComparison.Ordinal))
+        {
+            return currentMaterial.shader;
+        }
+
+        Shader current = currentMaterial != null ? currentMaterial.shader : null;
+        if (current != null)
+        {
+            string name = current.name;
+            if (isUrp && (name.Contains("URP/", StringComparison.Ordinal) || name.Contains("Universal Render Pipeline/")))
+            {
+                return current;
+            }
+
+            if (name.Contains("Sprites/Default"))
+            {
+                return current;
+            }
+        }
+
+        Shader urpUnlit = Shader.Find("Universal Render Pipeline/Unlit");
+        if (urpUnlit != null)
+        {
+            return urpUnlit;
+        }
+
+        Shader urpUnlitSimple = isUrp ? Shader.Find("Universal Render Pipeline/Unlit (Simple Lit)") : null;
+        if (urpUnlitSimple != null)
+        {
+            return urpUnlitSimple;
+        }
+
+        Shader unlitTexture = Shader.Find("Unlit/Texture");
+        if (unlitTexture != null)
+        {
+            return unlitTexture;
+        }
+
+        Shader unlitTransparent = Shader.Find("Unlit/Transparent");
+        if (unlitTransparent != null)
+        {
+            return unlitTransparent;
+        }
+
+        Shader sprites = Shader.Find("Sprites/Default");
+        if (sprites != null)
+        {
+            return sprites;
+        }
+
+        Shader standard = Shader.Find("Standard");
+        if (standard != null)
+        {
+            return standard;
+        }
+
+        return ChooseShader(currentMaterial);
     }
 
     private void EnsureTargets()
@@ -1349,6 +2311,13 @@ public class DeskContourTerrainGenerator : MonoBehaviour
         {
             material.SetTexture(MainTexProperty, texture);
         }
+
+        if (material.HasProperty(BaseTexProperty))
+        {
+            material.SetTexture(BaseTexProperty, texture);
+        }
+
+        material.mainTexture = texture;
     }
 
     private void CleanupGeneratedAssets()
@@ -1396,7 +2365,7 @@ public class DeskContourTerrainGenerator : MonoBehaviour
         }
     }
 
-    private static void DestroyRuntimeAsset(UnityObject obj)
+    private static void DestroyRuntimeAsset(UnityEngine.Object obj)
     {
         if (obj == null)
         {

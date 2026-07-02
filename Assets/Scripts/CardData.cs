@@ -18,7 +18,7 @@ public class CardData : ScriptableObject
     public CardKeyword keywords = CardKeyword.None;
     public string addedCardName;
     public CardRule[] specialRules;
-    public Sprite artwork;
+    public Texture2D artwork;
     public int attack = 1;
     public int defense = 1;
 
@@ -44,6 +44,7 @@ public class CardData : ScriptableObject
             AddedCardName = addedCardName,
             SpecialRules = specialRules,
             Keywords = keywords,
+            Artwork = artwork,
             Owner = owner,
             Zone = CardZone.Deck
         };

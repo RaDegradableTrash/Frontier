@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 [Serializable]
 public class RuntimeCard
@@ -16,6 +17,7 @@ public class RuntimeCard
     public int Attack;
     public int Defense;
     public int CurrentDefense;
+    public Texture2D Artwork;
     public string RulesText;
     public CardTrigger Trigger;
     public CardEffectType EffectType;
@@ -60,6 +62,7 @@ public class RuntimeCard
             EffectAmount = EffectAmount,
             SpecialRules = SpecialRules,
             Keywords = Keywords,
+            Artwork = Artwork,
             Owner = owner,
             Zone = CardZone.Deck,
             HasActed = false,

@@ -64,8 +64,14 @@ public partial class GameController : MonoBehaviour
     private RuntimeCard pendingAirborneUnit;
     private SlotInteract pendingAirborneSlot;
     private FeedbackManager feedbackManager;
+    private RuntimeCard draggingHandCard;
+    private int draggingHandCardOriginalIndex = -1;
+    private int draggingHandCardOriginalHandCount = -1;
     private string status = "Choose a starter deck.";
     private DragTargetArrow dragTargetArrow;
+    private Vector3 lastPointerScreenPosition;
+    private bool hasLastPointerPosition;
+    private bool handRevealRefreshNeeded = true;
     private int lastSceneCommandPointerFrame = -1;
     private CardView pointerFallbackCard;
     private bool pointerFallbackActive;
@@ -76,8 +82,6 @@ public partial class GameController : MonoBehaviour
     private int lastCardClickHandledFrame = -1;
     private RuntimeCard lastInspectClickedCard;
     private int lastInspectClickHandledFrame = -1;
-    private bool ShouldMutateRuntime => Application.isPlaying;
-
     private struct PendingDrawAnimation
     {
         public string CardId;
@@ -99,7 +103,7 @@ public partial class GameController : MonoBehaviour
 
     private void Start()
     {
-        phase = GamePhase.DeckBuilder;
+        SetGamePhase(GamePhase.DeckBuilder);
         if (autoStartMatch)
         {
             StartNewMatch();
@@ -116,12 +120,41 @@ public partial class GameController : MonoBehaviour
 
     private void Update()
     {
-        UpdateCardHover();
-        UpdateHandReveal();
-        HandleUnifiedPlayerHandPointerInput();
-        HandleCardPointerFallbackInput();
-        HandleHoveredCardClickShortcut();
-        HandleSceneCommandPointerInput();
+        Vector3 currentPointer = Input.mousePosition;
+        bool pointerMoved = !hasLastPointerPosition
+            || (int)currentPointer.x != (int)lastPointerScreenPosition.x
+            || (int)currentPointer.y != (int)lastPointerScreenPosition.y;
+        bool pointerActivity = pointerMoved
+            || Input.GetMouseButtonDown(0)
+            || Input.GetMouseButton(0)
+            || Input.GetMouseButtonUp(0);
+        bool handRevealNeedsRefresh = pointerActivity;
+
+        if (pointerActivity)
+        {
+            UpdateCardHover();
+            HandleUnifiedPlayerHandPointerInput();
+            HandleCardPointerFallbackInput();
+            HandleHoveredCardClickShortcut();
+            HandleSceneCommandPointerInput();
+        }
+
+        if (playerHandRevealRequested)
+        {
+            handRevealNeedsRefresh = true;
+            playerHandRevealRequested = false;
+        }
+
+        if (handRevealNeedsRefresh
+            || handRevealRefreshNeeded
+            || (playerHandRevealed && Time.time <= playerHandRevealGraceUntil))
+        {
+            UpdateHandReveal();
+            handRevealRefreshNeeded = false;
+        }
+
+        lastPointerScreenPosition = currentPointer;
+        hasLastPointerPosition = true;
 
         if (Input.GetKeyDown(KeyCode.F1))
         {
@@ -184,10 +217,7 @@ private void DrawSceneCommandHitAreas()
             return;
         }
 
-        if (sceneCommandButtons.Count == 0)
-        {
-            sceneCommandButtons.AddRange(FindObjectsOfType<SceneCommandButton>());
-        }
+        EnsureSceneCommandButtonsCached();
 
         foreach (SceneCommandButton button in sceneCommandButtons)
         {
@@ -211,6 +241,51 @@ private void DrawSceneCommandHitAreas()
         }
     }
 
+    private void EnsureSceneCommandButtonsCached()
+    {
+        sceneCommandButtons.RemoveAll(button => button == null);
+        if (sceneCommandButtons.Count > 0)
+        {
+            return;
+        }
+
+        sceneCommandButtons.AddRange(FindObjectsOfType<SceneCommandButton>());
+    }
+
+    private void SetGamePhase(GamePhase nextPhase)
+    {
+        if (phase == nextPhase)
+        {
+            return;
+        }
+
+        phase = nextPhase;
+        handRevealRefreshNeeded = true;
+    }
+
+    private void SetActiveSide(PlayerSide nextActiveSide)
+    {
+        if (activeSide == nextActiveSide)
+        {
+            return;
+        }
+
+        activeSide = nextActiveSide;
+        handRevealRefreshNeeded = true;
+    }
+
+    private void SetPlayerHandRevealed(bool shouldReveal)
+    {
+        if (playerHandRevealed == shouldReveal)
+        {
+            return;
+        }
+
+        playerHandRevealed = shouldReveal;
+        handRevealRefreshNeeded = true;
+        RefreshHandLayouts();
+    }
+
 private void EnsurePlayablePresentation()
     {
         PlayableScenePresenter presenter = FindObjectOfType<PlayableScenePresenter>();
@@ -229,7 +304,133 @@ private void KeepOpeningHand()
     {
         mulliganMarkedIds.Clear();
         ClearCardInspectState();
-        StartTurn(PlayerSide.Player);
+        ClearDraggedHandCardIfNeeded(true);
+        SetActiveSide(PlayerSide.Player);
+        SetGamePhase(GamePhase.PlayerTurn);
+        player.StartTurn();
+        UpdateFrontlineControl();
+        RefreshAllViews();
+        SetStatus("Mulligan complete. Your turn.");
+    }
+
+    private bool IsDraggingHandCard(RuntimeCard card)
+    {
+        return draggingHandCard != null && draggingHandCard == card;
+    }
+
+    private void BeginDraggingHandCard(RuntimeCard card)
+    {
+        if (card == null || card.Owner != PlayerSide.Player || card.Zone != CardZone.Hand)
+        {
+            return;
+        }
+
+        if (IsDraggingHandCard(card))
+        {
+            return;
+        }
+
+        int originalIndex = player.Hand.IndexOf(card);
+        if (originalIndex < 0)
+        {
+            return;
+        }
+
+        draggingHandCard = card;
+        draggingHandCardOriginalIndex = originalIndex;
+        draggingHandCardOriginalHandCount = player.Hand.Count;
+        player.Hand.RemoveAt(originalIndex);
+        RefreshHandLayouts();
+        hoveredHandCardId = null;
+    }
+
+    private void ReturnDraggedHandCard(RuntimeCard card)
+    {
+        if (!IsDraggingHandCard(card) || player.Hand.Contains(card))
+        {
+            return;
+        }
+
+        int insertIndex = draggingHandCardOriginalIndex;
+        if (insertIndex < 0 || insertIndex > player.Hand.Count)
+        {
+            insertIndex = player.Hand.Count;
+        }
+
+        player.Hand.Insert(insertIndex, card);
+        RefreshHandLayouts();
+        hoveredHandCardId = card.Id;
+    }
+
+    private void ClearDraggedHandCardIfNeeded(bool restoreToHand)
+    {
+        if (!IsDraggingHandCard(draggingHandCard))
+        {
+            return;
+        }
+
+        if (restoreToHand && !player.Hand.Contains(draggingHandCard))
+        {
+            ReturnDraggedHandCard(draggingHandCard);
+        }
+
+        draggingHandCard = null;
+        draggingHandCardOriginalIndex = -1;
+        draggingHandCardOriginalHandCount = -1;
+    }
+
+    private int HandPositionCountForFailedReturn(int cardCountBeforeDrag)
+    {
+        return cardCountBeforeDrag > 0 ? cardCountBeforeDrag : player.Hand.Count + 1;
+    }
+
+    private Vector3 DraggedHandReturnPosition(RuntimeCard card)
+    {
+        if (card == null)
+        {
+            return Vector3.zero;
+        }
+
+        int returnIndex = player.Hand.IndexOf(card);
+        int returnCount = player.Hand.Count;
+
+        if (IsDraggingHandCard(card) && draggingHandCardOriginalIndex >= 0)
+        {
+            returnIndex = draggingHandCardOriginalIndex;
+            returnCount = HandPositionCountForFailedReturn(draggingHandCardOriginalHandCount);
+        }
+
+        return HandPosition(PlayerSide.Player, Mathf.Clamp(returnIndex, 0, Mathf.Max(0, returnCount - 1)), returnCount);
+    }
+
+    private CardZone PlacementZoneForSlot(SlotInteract slot)
+    {
+        if (slot == null)
+        {
+            return CardZone.Frontline;
+        }
+
+        return slot.Zone == SlotZone.PlayerSupport
+            ? CardZone.PlayerSupport
+            : slot.Zone == SlotZone.EnemySupport
+                ? CardZone.EnemySupport
+                : CardZone.Frontline;
+    }
+
+    private int BoardColumnCount()
+    {
+        return board != null ? board.BoardColumnsForAllRows : 7;
+    }
+
+    private int BoardRowCount()
+    {
+        return board != null ? board.BoardRows : 5;
+    }
+
+    private bool IsBoardCombatUnit(RuntimeCard card)
+    {
+        return card != null
+            && (card.Zone == CardZone.PlayerSupport || card.Zone == CardZone.Frontline || card.Zone == CardZone.EnemySupport);
     }
 
 private void ResolveDeploymentEffect(PlayerState owner, RuntimeCard card, SlotInteract slot)
