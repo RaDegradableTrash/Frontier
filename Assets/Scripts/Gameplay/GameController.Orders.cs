@@ -83,7 +83,7 @@ public partial class GameController
 
         if (slot == null || slot.IsOccupied || BoardTargetRules.IsHeadquartersSlot(slot) || !IsEmptyZoneForAirborneDeployment(slot, PlayerSide.Player))
         {
-            RejectSelectedHandCard("AIRBORNE: SELECT AN EMPTY SUPPORT OR FRONTLINE SLOT.");
+            RejectSelectedHandCard("AIRBORNE: SELECT AN EMPTY GRID SLOT.");
             return;
         }
 
@@ -178,7 +178,7 @@ public partial class GameController
             return false;
         }
 
-        return slot.Zone == SlotZone.Frontline || slot.Zone == SupportZoneFor(owner);
+        return true;
     }
 
     private void DeployAirborneUnit(PlayerState owner, RuntimeCard unit, SlotInteract slot, Color feedbackColor)
@@ -191,14 +191,13 @@ public partial class GameController
         RemoveFromHand(owner, unit);
         unit.AddKeyword(CardKeyword.Blitz);
         pendingDeployDropCardId = unit.Id;
-        CardZone targetZone = slot.Zone == SlotZone.Frontline ? CardZone.Frontline : SupportCardZoneFor(owner.Side);
-        PlaceCardInSlot(unit, slot, targetZone);
+        PlaceCardInSlot(unit, slot, PlacementZoneForSlot(slot));
         SpawnFloatingText("AIRBORNE", slot.transform.position, feedbackColor);
         ResolveDeploymentEffect(owner, unit, slot);
 
         if (DeployStrikeRules.ShouldTriggerStrike(unit))
         {
-            board.TriggerStrike(slot.X, slot.Zone);
+            board.TriggerStrike(slot);
             StartCoroutine(ReanchorBoardCardsAfterStrike());
         }
     }
@@ -439,7 +438,7 @@ public partial class GameController
 
         if (BoardTargetRules.IsHeadquartersSlot(targetSlot) && !targetSlot.IsOccupied)
         {
-            PlayerSide targetSide = targetSlot.Zone == SlotZone.EnemySupport ? PlayerSide.Enemy : PlayerSide.Player;
+            PlayerSide targetSide = HeadquartersSideForSlot(targetSlot);
             PlayerState targetState = GetState(targetSide);
             targetState.HeadquartersHealth -= order.EffectAmount;
             SpawnFloatingText($"-{order.EffectAmount} HQ", HeadquartersMarker(targetSide), Color.red, FeedbackCueType.Attack);
@@ -454,8 +453,10 @@ public partial class GameController
             return;
         }
 
-        ResolveAdjacentOrderDamage(order, board.GetSlot(targetSlot.X - 1, targetSlot.Zone));
-        ResolveAdjacentOrderDamage(order, board.GetSlot(targetSlot.X + 1, targetSlot.Zone));
+        ResolveAdjacentOrderDamage(order, board.GetSlotInRow(targetSlot.X - 1, targetSlot.Z));
+        ResolveAdjacentOrderDamage(order, board.GetSlotInRow(targetSlot.X + 1, targetSlot.Z));
+        ResolveAdjacentOrderDamage(order, board.GetSlotInRow(targetSlot.X, targetSlot.Z - 1));
+        ResolveAdjacentOrderDamage(order, board.GetSlotInRow(targetSlot.X, targetSlot.Z + 1));
     }
 
     private void ResolveAdjacentOrderDamage(RuntimeCard order, SlotInteract slot)

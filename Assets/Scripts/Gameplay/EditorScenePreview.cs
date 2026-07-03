@@ -80,7 +80,7 @@ public class EditorScenePreview : MonoBehaviour
             return;
         }
 
-        DestroyImmediate(existing.gameObject);
+        RuntimeSafeDestroy.Destroy(existing.gameObject);
         previewRoot = null;
     }
 
@@ -88,7 +88,7 @@ public class EditorScenePreview : MonoBehaviour
     {
         for (int i = previewRoot.childCount - 1; i >= 0; i--)
         {
-            DestroyImmediate(previewRoot.GetChild(i).gameObject);
+            RuntimeSafeDestroy.Destroy(previewRoot.GetChild(i).gameObject);
         }
     }
 
@@ -131,27 +131,13 @@ public class EditorScenePreview : MonoBehaviour
                 RulesText = string.Empty
             };
 
-            string prefabPath = CardView.ResolvePrefabPath(previewCard, true);
-            GameObject prefab = Resources.Load<GameObject>(prefabPath);
-            if (prefab == null)
-            {
-                Debug.LogError($"Missing card prefab '{prefabPath}' for editor preview card {cardName}.");
-                return;
-            }
-
-            GameObject cardObject = Object.Instantiate(prefab);
+            GameObject cardObject = new GameObject(cardName);
             cardObject.name = cardName;
             cardObject.transform.SetParent(previewRoot, false);
             cardObject.transform.position = position;
             cardObject.transform.localScale = Vector3.one * 0.52f;
 
-            CardView view = cardObject.GetComponent<CardView>();
-            if (view == null)
-            {
-                Debug.LogError($"Editor preview card prefab '{prefabPath}' is missing CardView component for {cardName}.");
-                RuntimeSafeDestroy.Destroy(cardObject);
-                return;
-            }
+            CardView view = cardObject.AddComponent<CardView>();
             view.Initialize(previewCard, null, hidden, true);
 
             ApplyPreviewTint(view, hidden ? new Color(0.18f, 0.22f, 0.3f) : Color.Lerp(bodyColor, Color.white, 0.35f));
@@ -167,12 +153,15 @@ public class EditorScenePreview : MonoBehaviour
         MeshRenderer[] renderers = view.GetComponentsInChildren<MeshRenderer>(true);
         foreach (MeshRenderer renderer in renderers)
         {
-            if (renderer == null || renderer.material == null || !renderer.material.HasProperty("_Color"))
+            Material material = renderer != null
+                ? Application.isPlaying ? renderer.material : renderer.sharedMaterial
+                : null;
+            if (material == null || !material.HasProperty("_Color"))
             {
                 continue;
             }
 
-            renderer.material.color = color;
+            material.color = color;
         }
     }
 

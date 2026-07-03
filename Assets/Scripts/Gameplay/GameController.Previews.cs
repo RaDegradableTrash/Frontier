@@ -25,7 +25,7 @@ public partial class GameController
 
         if (BoardTargetRules.IsHeadquartersSlot(slot))
         {
-            PlayerSide headquartersSide = slot.Zone == SlotZone.EnemySupport ? PlayerSide.Enemy : PlayerSide.Player;
+            PlayerSide headquartersSide = HeadquartersSideForSlot(slot);
             board?.ShowHeadquartersDamagePreview(headquartersSide, preview.DamageToTarget, preview.TargetLethal);
             return;
         }

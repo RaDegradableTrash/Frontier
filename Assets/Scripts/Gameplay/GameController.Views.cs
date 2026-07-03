@@ -198,11 +198,7 @@ public partial class GameController
             {
                 if (card.Type == CardType.Unit)
                 {
-                    HighlightEmptySlots(SlotZone.PlayerSupport, highlighted, SlotHighlightLabelRules.LabelFor(card, SlotZone.PlayerSupport));
-                    if (card.HasKeyword(CardKeyword.Mobilize) && (!hasFrontlineController || frontlineController == card.Owner))
-                    {
-                        HighlightEmptySlots(SlotZone.Frontline, highlighted, SlotHighlightLabelRules.LabelFor(card, SlotZone.Frontline));
-                    }
+                    HighlightEmptySlots(SlotZone.Frontline, highlighted, SlotHighlightLabelRules.LabelFor(card, SlotZone.Frontline));
                 }
                 else if (card.Type == CardType.Order)
                 {
@@ -213,20 +209,16 @@ public partial class GameController
                     HighlightAllSlots(highlighted, SlotHighlightLabelRules.LabelFor(card, SlotZone.PlayerSupport));
                 }
             }
-            else if (card.Zone == CardZone.PlayerSupport)
+            else if (IsBoardCombatUnit(card))
             {
-                if (UnitActionHighlightRules.ShouldHighlightAdvanceTargets(card, player.Kredits, hasFrontlineController, frontlineController))
+                if (card.Owner == PlayerSide.Player
+                    && !card.HasActed
+                    && !card.HasKeyword(CardKeyword.Pinned)
+                    && player.Kredits >= EffectiveOperationCostForAction(card))
                 {
                     HighlightEmptySlots(SlotZone.Frontline, highlighted, SlotHighlightLabelRules.LabelFor(card, SlotZone.Frontline));
                 }
 
-                if (UnitActionHighlightRules.ShouldHighlightAttackTargets(card, player.Kredits))
-                {
-                    HighlightAttackTargets(card, SlotZone.Frontline, highlighted);
-                }
-            }
-            else if (card.Zone == CardZone.Frontline)
-            {
                 if (UnitActionHighlightRules.ShouldHighlightAttackTargets(card, player.Kredits))
                 {
                     HighlightAttackTargets(card, highlighted);
@@ -247,10 +239,7 @@ public partial class GameController
 
         private void HighlightAttackTargets(RuntimeCard attacker, bool highlighted)
         {
-            HighlightAttackTargets(attacker, SlotZone.PlayerSupport, highlighted);
-            HighlightAttackTargets(attacker, SlotZone.EnemySupport, highlighted);
             HighlightAttackTargets(attacker, SlotZone.Frontline, highlighted);
-            HighlightHeadquartersAttackTarget(attacker, highlighted);
         }
 
         private void HighlightHeadquartersAttackTarget(RuntimeCard attacker, bool highlighted)
@@ -272,10 +261,8 @@ public partial class GameController
 
         private void HighlightAttackTargets(RuntimeCard attacker, SlotZone zone, bool highlighted)
         {
-            int count = zone == SlotZone.Frontline ? board.FrontlineColumns : board.SupportColumns;
-            for (int x = 0; x < count; x++)
+            foreach (SlotInteract slot in AllBoardSlots())
             {
-                SlotInteract slot = board.GetSlot(x, zone);
                 if (slot != null && IsLegalAttackTarget(attacker, slot))
                 {
                     bool defenderHasGuard = attacker != null && IsProtectedByAdjacentGuard(slot, GetOpponentState(attacker.Owner).Side);
@@ -292,9 +279,13 @@ public partial class GameController
 
         private void HighlightMatchingSlots(SlotPredicate predicate, bool highlighted, string label)
         {
-            HighlightSlots(SlotZone.PlayerSupport, predicate, highlighted, label);
-            HighlightSlots(SlotZone.Frontline, predicate, highlighted, label);
-            HighlightSlots(SlotZone.EnemySupport, predicate, highlighted, label);
+            foreach (SlotInteract slot in AllBoardSlots())
+            {
+                if (slot != null && predicate(slot))
+                {
+                    slot.SetHighlighted(highlighted, label);
+                }
+            }
         }
 
         private void HighlightSlots(SlotZone zone, SlotPredicate predicate, bool highlighted)
@@ -304,10 +295,8 @@ public partial class GameController
 
         private void HighlightSlots(SlotZone zone, SlotPredicate predicate, bool highlighted, string label)
         {
-            int count = zone == SlotZone.Frontline ? board.FrontlineColumns : board.SupportColumns;
-            for (int x = 0; x < count; x++)
+            foreach (SlotInteract slot in AllBoardSlots())
             {
-                SlotInteract slot = board.GetSlot(x, zone);
                 if (slot != null && predicate(slot))
                 {
                     slot.SetHighlighted(highlighted, label);
@@ -348,6 +337,20 @@ public partial class GameController
             RefreshSceneActionPrompt();
         }
 
+        private void RefreshCameraAnchoredViewsIfNeeded(bool pointerMoved)
+        {
+            Vector3 cameraOffset = CameraFollowOffset();
+            bool cameraMoved = (cameraOffset - lastCameraAnchoredViewOffset).sqrMagnitude > 0.00001f;
+            if (!cameraMoved && !pointerMoved)
+            {
+                return;
+            }
+
+            lastCameraAnchoredViewOffset = cameraOffset;
+            RefreshHandLayouts();
+            RefreshKreditDisplays();
+        }
+
         private void RefreshHandLayoutsFor(List<RuntimeCard> hand, PlayerSide side)
         {
             bool mulliganPresentation = MatchStartRules.ShouldUseMulliganPresentation(phase, activeSide) && side == PlayerSide.Player;
@@ -361,7 +364,8 @@ public partial class GameController
                 }
 
                 bool centerInspect = false;
-                Quaternion rotation = mulliganPresentation ? Quaternion.identity : HandRotation(side, i, hand.Count);
+                Quaternion rotation = HandBarRotation(side, hand, mulliganPresentation) *
+                    (mulliganPresentation ? Quaternion.identity : HandRotation(side, i, hand.Count));
                 Vector3 position = centerInspect
                     ? PlayableSceneRules.CenterInspectAnchor
                     : (mulliganPresentation ? MulliganHandPosition(i, hand.Count) : HandPosition(side, i, hand.Count));
@@ -467,6 +471,7 @@ public partial class GameController
                 }
 
                 display.UpdateKredits(GetState(display.Side));
+                display.transform.position = KreditDisplayPosition(display.Side);
             }
         }
 
@@ -526,26 +531,8 @@ public partial class GameController
 
             if (centerInspectView == null)
             {
-                string prefabPath = CardView.ResolvePrefabPath(centerInspectCard, true);
-                GameObject cardObject = Resources.Load<GameObject>(prefabPath);
-                if (cardObject == null)
-                {
-                    Debug.LogError($"Missing center-inspect card prefab '{prefabPath}' for card {centerInspectCard?.CardName ?? "<null>"}.");
-                    return;
-                }
-                else
-                {
-                    cardObject = Object.Instantiate(cardObject);
-                }
-
-                cardObject.name = $"CenterInspect_{centerInspectCard.CardName}";
-                centerInspectView = cardObject.GetComponent<CardView>();
-                if (centerInspectView == null)
-                {
-                    Debug.LogError($"Center-inspect card prefab '{prefabPath}' missing CardView component for {centerInspectCard?.CardName ?? "<null>"}.");
-                    RuntimeSafeDestroy.Destroy(cardObject);
-                    return;
-                }
+                GameObject cardObject = new GameObject($"CenterInspect_{centerInspectCard.CardName}");
+                centerInspectView = cardObject.AddComponent<CardView>();
                 centerInspectView.Initialize(centerInspectCard, this, false, true);
                 transientCardViews.Add(centerInspectView);
             }
@@ -695,7 +682,8 @@ public partial class GameController
                 {
                     continue;
                 }
-                Quaternion rotation = mulliganPresentation ? Quaternion.identity : HandRotation(side, i, hand.Count);
+                Quaternion rotation = HandBarRotation(side, hand, mulliganPresentation) *
+                    (mulliganPresentation ? Quaternion.identity : HandRotation(side, i, hand.Count));
                 bool centerInspect = false;
                 Vector3 position = centerInspect
                     ? PlayableSceneRules.CenterInspectAnchor
@@ -781,6 +769,51 @@ public partial class GameController
             float baseRotation = side == PlayerSide.Enemy ? 180f : 0f;
             float fanRotation = 0f;
             return Quaternion.Euler(0f, baseRotation + fanRotation, 0f);
+        }
+
+        private Quaternion HandBarRotation(PlayerSide side, List<RuntimeCard> hand, bool mulliganPresentation)
+        {
+            if (side != PlayerSide.Player || hand == null || hand.Count == 0)
+            {
+                return Quaternion.identity;
+            }
+
+            Camera mainCamera = Camera.main;
+            if (mainCamera == null || Screen.width <= 0 || Screen.height <= 0)
+            {
+                return Quaternion.identity;
+            }
+
+            Vector3 pointer = Input.mousePosition;
+            if (pointer.x < 0f || pointer.x > Screen.width || pointer.y < 0f || pointer.y > Screen.height)
+            {
+                return Quaternion.identity;
+            }
+
+            Ray ray = mainCamera.ScreenPointToRay(pointer);
+            Plane handPlane = new Plane(Vector3.up, mulliganPresentation
+                ? PlayableSceneRules.MulliganHandAnchor.y
+                : PlayableSceneRules.PlayerHandAnchor.y);
+            if (!handPlane.Raycast(ray, out float enter))
+            {
+                return Quaternion.identity;
+            }
+
+            Vector3 hit = ray.GetPoint(enter);
+            Vector3 center = mulliganPresentation
+                ? MulliganHandPosition((hand.Count - 1) / 2, hand.Count)
+                : HandPosition(side, (hand.Count - 1) / 2, hand.Count);
+            Vector3 delta = hit - center;
+            float halfWidth = Mathf.Max(0.7f, PlayableSceneRules.HandSpacing * Mathf.Max(1f, hand.Count - 1) * 0.5f + 0.45f);
+            float halfDepth = 0.62f;
+            float x = Mathf.Clamp(delta.x / halfWidth, -1f, 1f);
+            float z = Mathf.Clamp(delta.z / halfDepth, -1f, 1f);
+            float reach = Mathf.Clamp01(1f - Mathf.Max(0f, new Vector2(x, z).magnitude - 0.2f) * 0.55f);
+
+            float pitch = z * PlayableSceneRules.HandBarTiltMaxPitch * reach;
+            float roll = -x * PlayableSceneRules.HandBarTiltMaxRoll * reach;
+            float yaw = -x * PlayableSceneRules.HandBarTiltMaxYaw * reach;
+            return Quaternion.Euler(pitch, yaw, roll);
         }
 
         private Vector3 FocusedHandHoverOffset(List<RuntimeCard> hand, PlayerSide side, int index, bool mulliganPresentation)
@@ -880,9 +913,18 @@ public partial class GameController
 
         private Vector3 HandPosition(PlayerSide side, int index, int count)
         {
+            Vector3 cameraOffset = CameraFollowOffset();
             if (sceneCardLayout != null)
             {
-                return sceneCardLayout.HandPosition(side, index, count, playerHandRevealed);
+                Vector3 scenePosition = sceneCardLayout.HandPosition(side, index, count, playerHandRevealed)
+                    + cameraOffset
+                    + Vector3.up * CardLayoutRules.HandLayerHeightOffset(index);
+                if (side == PlayerSide.Player)
+                {
+                    scenePosition.z = ConstrainedPlayerHandZ(playerHandRevealed, scenePosition.z, scenePosition.y);
+                }
+
+                return scenePosition;
             }
 
             float spacing = PlayableSceneRules.HandSpacing;
@@ -894,10 +936,73 @@ public partial class GameController
                 z += CardLayoutRules.HandFanDepthOffset(index, count);
             }
 
-            float y = side == PlayerSide.Player
-                ? 0.08f + CardLayoutRules.HandLayerHeightOffset(index)
-                : 0.08f;
-            return new Vector3(CardLayoutRules.OffsetIndex(index, count) * spacing, y, z);
+            Vector3 anchor = side == PlayerSide.Player
+                ? (playerHandRevealed ? PlayableSceneRules.PlayerHandRevealedAnchor : PlayableSceneRules.PlayerHandAnchor)
+                : PlayableSceneRules.EnemyHandAnchor;
+            Vector3 position = new Vector3(
+                    anchor.x + CardLayoutRules.OffsetIndex(index, count) * spacing,
+                    anchor.y + CardLayoutRules.HandLayerHeightOffset(index),
+                    z)
+                + cameraOffset;
+            if (side == PlayerSide.Player)
+            {
+                position.z = ConstrainedPlayerHandZ(playerHandRevealed, position.z, position.y);
+            }
+
+            return position;
+        }
+
+        private float ConstrainedPlayerHandZ(bool revealed, float preferredZ, float handPlaneY)
+        {
+            float halfDepth = PlayableSceneRules.HandCardHeight * PlayableSceneRules.HandCardScale * 0.5f;
+            float screenBottomZ = PlayerHandScreenBottomZ(handPlaneY);
+            float maxZ = revealed
+                ? screenBottomZ + halfDepth
+                : screenBottomZ - halfDepth * 0.65f;
+            return Mathf.Min(preferredZ, maxZ);
+        }
+
+        private float PlayerHandScreenBottomZ(float handPlaneY)
+        {
+            Camera mainCamera = Camera.main;
+            if (mainCamera == null || !mainCamera.orthographic)
+            {
+                return PlayableSceneRules.CameraPosition.z - PlayableSceneRules.OrthographicSize;
+            }
+
+            Ray bottomRay = mainCamera.ViewportPointToRay(new Vector3(0.5f, 0f, 0f));
+            Plane handPlane = new Plane(Vector3.up, handPlaneY);
+            if (!handPlane.Raycast(bottomRay, out float enter))
+            {
+                return mainCamera.transform.position.z - mainCamera.orthographicSize;
+            }
+
+            return bottomRay.GetPoint(enter).z;
+        }
+
+        private Vector3 CameraFollowOffset()
+        {
+            if (cameraInteraction == null)
+            {
+                cameraInteraction = FindObjectOfType<CameraInteraction>();
+            }
+
+            if (cameraInteraction == null)
+            {
+                return Vector3.zero;
+            }
+
+            Vector3 offset = cameraInteraction.ViewOffset;
+            offset.y = 0f;
+            return offset;
+        }
+
+        private Vector3 KreditDisplayPosition(PlayerSide side)
+        {
+            Vector3 basePosition = side == PlayerSide.Player
+                ? PlayableSceneRules.PlayerKreditDisplayPosition
+                : PlayableSceneRules.EnemyKreditDisplayPosition;
+            return basePosition + CameraFollowOffset();
         }
 
         private Vector3 CountermeasurePosition(PlayerSide side, int index, int count, float fallbackZ)
@@ -986,26 +1091,8 @@ public partial class GameController
 
         private CardView CreateCardView(RuntimeCard card, bool hidden, bool handPrefab)
         {
-            string prefabPath = CardView.ResolvePrefabPath(card, handPrefab);
-            GameObject cardObject = Resources.Load<GameObject>(prefabPath);
-            if (cardObject == null)
-            {
-                Debug.LogError($"Missing card prefab '{prefabPath}' for card {card?.CardName ?? "<null>"}.");
-                return null;
-            }
-            else
-            {
-                cardObject = Object.Instantiate(cardObject);
-            }
-
-            cardObject.name = $"Card_{card.CardName}";
-            CardView view = cardObject.GetComponent<CardView>();
-            if (view == null)
-            {
-                Debug.LogError($"Card prefab '{prefabPath}' missing CardView component for card {card?.CardName ?? "<null>"}.");
-                RuntimeSafeDestroy.Destroy(cardObject);
-                return null;
-            }
+            GameObject cardObject = new GameObject($"Card_{card.CardName}");
+            CardView view = cardObject.AddComponent<CardView>();
             view.Initialize(card, this, hidden, handPrefab);
             cardViews.Add(view);
             return view;
@@ -1013,26 +1100,8 @@ public partial class GameController
 
         private CardView CreateTransientCardView(RuntimeCard card, bool handPrefab)
         {
-            string prefabPath = CardView.ResolvePrefabPath(card, handPrefab);
-            GameObject cardObject = Resources.Load<GameObject>(prefabPath);
-            if (cardObject == null)
-            {
-                Debug.LogError($"Missing transient card prefab '{prefabPath}' for card {card?.CardName ?? "<null>"}.");
-                return null;
-            }
-            else
-            {
-                cardObject = Object.Instantiate(cardObject);
-            }
-
-            cardObject.name = $"PlayedOrder_{card.CardName}";
-            CardView view = cardObject.GetComponent<CardView>();
-            if (view == null)
-            {
-                Debug.LogError($"Transient card prefab '{prefabPath}' missing CardView component for card {card?.CardName ?? "<null>"}.");
-                RuntimeSafeDestroy.Destroy(cardObject);
-                return null;
-            }
+            GameObject cardObject = new GameObject($"PlayedOrder_{card.CardName}");
+            CardView view = cardObject.AddComponent<CardView>();
             view.Initialize(card, this, false, handPrefab);
             transientCardViews.Add(view);
             return view;
@@ -1094,7 +1163,7 @@ public partial class GameController
                 ? new DamagePreview
                 {
                     DamageToTarget = order.EffectAmount,
-                    TargetLethal = order.EffectAmount >= GetState(targetSlot.Zone == SlotZone.EnemySupport ? PlayerSide.Enemy : PlayerSide.Player).HeadquartersHealth
+                    TargetLethal = order.EffectAmount >= GetState(HeadquartersSideForSlot(targetSlot)).HeadquartersHealth
                 }
                 : DamagePreviewRules.ForOrder(order, targetSlot.Occupant);
             if (order.EffectType == CardEffectType.DamageTargetUnitAndAdjacent)
@@ -1153,12 +1222,13 @@ public partial class GameController
             Vector3 anchor = PlayableSceneRules.MulliganHandAnchor;
             return anchor
                 + Vector3.right * CardLayoutRules.OffsetIndex(index, count) * spacing
-                + Vector3.up * CardLayoutRules.HandLayerHeightOffset(index);
+                + Vector3.up * CardLayoutRules.HandLayerHeightOffset(index)
+                + CameraFollowOffset();
         }
 
         private Vector3 DeckWorldPosition(PlayerSide side)
         {
-            float stackHeight = 0.12f + PlayableSceneRules.PileStackLayerCount * 0.006f;
+            float stackHeight = PlayableSceneRules.PileCubeDepthHeight + PlayableSceneRules.PileTopDrawClearance;
             return side == PlayerSide.Player
                 ? PlayableSceneRules.PlayerDeckPilePosition + Vector3.up * stackHeight
                 : PlayableSceneRules.EnemyDeckPilePosition + Vector3.up * stackHeight;
@@ -1166,7 +1236,7 @@ public partial class GameController
 
         private Vector3 DiscardWorldPosition(PlayerSide side)
         {
-            float stackHeight = 0.14f + PlayableSceneRules.PileStackLayerCount * 0.006f;
+            float stackHeight = PlayableSceneRules.PileCubeDepthHeight + PlayableSceneRules.PileTopDrawClearance * 0.55f;
             return side == PlayerSide.Player
                 ? PlayableSceneRules.PlayerDiscardPilePosition + Vector3.up * stackHeight
                 : PlayableSceneRules.EnemyDiscardPilePosition + Vector3.up * stackHeight;

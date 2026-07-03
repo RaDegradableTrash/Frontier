@@ -16,6 +16,7 @@ public class SlotInteract : MonoBehaviour
     private float impulse;
     private float impulseOffset;
     private Vector3 strikeOrigin;
+    private Vector3 strikeLocalDirection;
 
     public void Initialize(BoardManager owner, int x, int z, SlotZone zone, SlotVisualize_Temp slotVisual)
     {
@@ -56,9 +57,14 @@ public class SlotInteract : MonoBehaviour
         strikeOrigin = originPosition;
         impulseOffset = distance;
         impulse = force;
-        float delay = Mathf.Lerp(0.02f, 0.16f, Mathf.InverseLerp(0f, 5f, distance));
+        Vector3 worldDirection = transform.position - strikeOrigin;
+        worldDirection.y = 0f;
+        strikeLocalDirection = worldDirection.sqrMagnitude > 0.0001f
+            ? transform.parent != null ? transform.parent.InverseTransformDirection(worldDirection.normalized) : worldDirection.normalized
+            : Vector3.zero;
+        float delay = Mathf.Lerp(0.015f, 0.22f, Mathf.InverseLerp(0f, 6.8f, distance));
         StopAllCoroutines();
-        float strength = force / (1f + distance * 0.68f);
+        float strength = force / (1f + distance * 0.46f);
         StartCoroutine(StrikeAnimation(strength, delay));
     }
 
@@ -71,10 +77,10 @@ public class SlotInteract : MonoBehaviour
     {
         yield return new WaitForSeconds(delay);
 
-        float duration = 0.82f;
+        float duration = 1.08f;
         float elapsed = 0f;
-        float attenuation = Mathf.Clamp01(1f / (1f + impulseOffset * 0.95f));
-        float distanceDecay = Mathf.Clamp01(1f / (1f + impulseOffset * 1.2f));
+        float attenuation = Mathf.Clamp01(1f / (1f + impulseOffset * 0.62f));
+        float distanceDecay = Mathf.Clamp01(1f / (1f + impulseOffset * 0.72f));
 
         while (elapsed < duration)
         {
@@ -83,34 +89,32 @@ public class SlotInteract : MonoBehaviour
 
             float wave = Mathf.Sin(t * Mathf.PI);
             float settle = Mathf.SmoothStep(0f, 1f, t);
-            float travel = 1f - Mathf.Cos(Mathf.Clamp01(t) * Mathf.PI * 0.5f);
-            float outward = 1f - t * t;
-            Vector3 direction = transform.position - strikeOrigin;
-            direction.y = 0f;
-            Vector3 flatDirection = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector3.zero;
+            float travel = Mathf.Sin(Mathf.Clamp01(t) * Mathf.PI * 0.72f);
+            float outward = Mathf.Pow(1f - t, 1.35f);
+            Vector3 flatDirection = strikeLocalDirection;
 
-            float hop = wave * (0.38f * strength * distanceDecay) * Mathf.Max(0.16f, 1f - travel * 0.45f);
-            float push = 0.18f * strength * distanceDecay * Mathf.Pow(1f - attenuation, 0.15f);
+            float hop = wave * (0.62f * strength * distanceDecay) * Mathf.Max(0.12f, 1f - t * 0.22f);
+            float push = 0.34f * strength * distanceDecay * Mathf.Lerp(1.15f, 0.22f, attenuation);
             Vector3 rippleOffset = flatDirection * push * travel * outward;
 
             float noise = Mathf.Sin((t * 11f) + originalLocalPosition.x * 12f) + Mathf.Cos((t * 13f) + originalLocalPosition.z * 12f);
             Vector3 jitter = new Vector3(
-                noise * 0.0085f * distanceDecay,
+                noise * 0.014f * distanceDecay,
                 0f,
-                -noise * 0.0085f * distanceDecay);
+                -noise * 0.014f * distanceDecay);
 
-            float spin = 10f * strength * distanceDecay * Mathf.Cos(t * Mathf.PI * 2.1f) * Mathf.Pow(1f - t, 0.72f);
-            float tilt = 8f * strength * distanceDecay * Mathf.Sin(t * Mathf.PI * 0.95f) * Mathf.Pow(1f - t, 0.44f);
-            float yaw = 5f * strength * (1f - distanceDecay) * Mathf.Cos(t * Mathf.PI * 1.1f) * Mathf.Pow(1f - t, 0.52f);
-            float roll = 2.5f * strength * Mathf.Cos(t * Mathf.PI * 0.9f) * Mathf.Pow(1f - t, 0.56f);
+            float spin = 18f * strength * distanceDecay * Mathf.Cos(t * Mathf.PI * 2.4f) * Mathf.Pow(1f - t, 0.78f);
+            float tilt = 15f * strength * distanceDecay * Mathf.Sin(t * Mathf.PI * 0.95f) * Mathf.Pow(1f - t, 0.52f);
+            float yaw = 8f * strength * distanceDecay * Mathf.Cos(t * Mathf.PI * 1.35f) * Mathf.Pow(1f - t, 0.56f);
+            float roll = 9f * strength * distanceDecay * Mathf.Cos(t * Mathf.PI * 1.1f) * Mathf.Pow(1f - t, 0.62f);
 
             Quaternion localTilt = Quaternion.Euler(
                 tilt * flatDirection.z,
                 spin,
                 yaw + flatDirection.x * tilt * 0.85f + roll);
             Quaternion wobble = Quaternion.Slerp(Quaternion.identity, localTilt, 0.75f);
-            transform.localPosition = Vector3.Lerp(originalLocalPosition, originalLocalPosition + rippleOffset + jitter, settle) + Vector3.up * hop;
-            transform.localRotation = Quaternion.Slerp(transform.localRotation, wobble, 0.28f + strength * 0.18f);
+            transform.localPosition = originalLocalPosition + Vector3.LerpUnclamped(rippleOffset + jitter, Vector3.zero, settle) + Vector3.up * hop;
+            transform.localRotation = Quaternion.Slerp(transform.localRotation, wobble, 0.34f + strength * 0.2f);
             yield return null;
         }
 

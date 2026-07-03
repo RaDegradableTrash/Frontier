@@ -12,7 +12,7 @@ public partial class GameController
 
         foreach (RuntimeCard card in cardSlots.Keys)
         {
-            if (card == null || card.Owner != owner.Side || card.Zone != CardZone.PlayerSupport && card.Zone != CardZone.Frontline)
+            if (card == null || card.Owner != owner.Side || !IsBoardCombatUnit(card))
             {
                 continue;
             }
@@ -85,12 +85,7 @@ public partial class GameController
 
     private bool TryDeploySelectedUnit(SlotInteract slot)
     {
-        bool canMobilizeToFrontline = selectedCard.HasKeyword(CardKeyword.Mobilize)
-            && slot.Zone == SlotZone.Frontline
-            && (!hasFrontlineController || frontlineController == selectedCard.Owner);
-        bool canDeployToSupport = slot.Zone == SlotZone.PlayerSupport;
-
-        if ((!canDeployToSupport && !canMobilizeToFrontline) || slot.IsOccupied || BoardTargetRules.IsHeadquartersSlot(slot))
+        if (slot.IsOccupied || BoardTargetRules.IsHeadquartersSlot(slot))
         {
             RejectSelectedHandCard(SceneGuidanceRules.IllegalDeployTargetPrompt(selectedCard, slot.Zone, slot.IsOccupied, hasFrontlineController, frontlineController));
             return false;
@@ -110,13 +105,13 @@ public partial class GameController
         player.Hand.Remove(deployedCard);
         UnitDeploymentRules.MarkDeployed(deployedCard);
         pendingDeployDropCardId = deployedCard.Id;
-        PlaceCardInSlot(deployedCard, slot, slot.Zone == SlotZone.Frontline ? CardZone.Frontline : CardZone.PlayerSupport);
+        PlaceCardInSlot(deployedCard, slot, PlacementZoneForSlot(slot));
         SpawnFloatingText("DEPLOY", slot.transform.position, Color.cyan);
         player.RegisterCardPlayed();
         ResolveDeploymentEffect(player, deployedCard, slot);
         if (DeployStrikeRules.ShouldTriggerStrike(deployedCard))
         {
-            board.TriggerStrike(slot.X, slot.Zone);
+            board.TriggerStrike(slot);
             StartCoroutine(ReanchorBoardCardsAfterStrike());
         }
 
@@ -143,34 +138,45 @@ public partial class GameController
 
     private bool TryMoveToFrontline(SlotInteract destination)
     {
-        if (destination.IsOccupied)
+        return TryMoveToSlot(selectedCard, destination);
+    }
+
+    private bool TryMoveToSlot(RuntimeCard card, SlotInteract destination)
+    {
+        if (card == null || destination == null || destination.IsOccupied || BoardTargetRules.IsHeadquartersSlot(destination))
         {
-            SetStatus("That frontline slot is occupied.");
+            SetStatus("Select an empty grid slot.");
             return false;
         }
 
-        if (!CanMoveToFrontline(selectedCard))
+        if (!CanMoveOnBoard(card))
         {
             return false;
         }
 
-        if (!player.TrySpendKredits(EffectiveOperationCostForAction(selectedCard)))
+        PlayerState owner = GetState(card.Owner);
+        if (!owner.TrySpendKredits(EffectiveOperationCostForAction(card)))
         {
-            SetStatus(SceneGuidanceRules.CannotAdvancePrompt(selectedCard, player.Kredits));
+            SetStatus(SceneGuidanceRules.CannotAdvancePrompt(card, owner.Kredits));
             return false;
         }
 
-        MoveCardToSlot(selectedCard, destination, CardZone.Frontline);
-        selectedCard.HasActed = true;
-        SpawnFloatingText("ADVANCE", destination.transform.position, Color.yellow);
+        MoveCardToSlot(card, destination, PlacementZoneForSlot(destination));
+        card.HasActed = true;
+        SpawnFloatingText("MOVE", destination.transform.position, Color.yellow);
         UpdateFrontlineControl();
-        SetStatus(SceneGuidanceRules.AfterAdvancePrompt(selectedCard, player.Kredits));
+        SetStatus(SceneGuidanceRules.AfterAdvancePrompt(card, owner.Kredits));
         ClearSelection();
         RefreshAllViews();
         return true;
     }
 
     private bool CanMoveToFrontline(RuntimeCard card)
+    {
+        return CanMoveOnBoard(card);
+    }
+
+    private bool CanMoveOnBoard(RuntimeCard card)
     {
         if (!CanSpendUnitOperation(card, player.Kredits, out int requiredOperationCost))
         {
@@ -181,12 +187,6 @@ public partial class GameController
         if (requiredOperationCost > player.Kredits)
         {
             SetStatus(SceneGuidanceRules.CannotAdvancePrompt(card, player.Kredits));
-            return false;
-        }
-
-        if (hasFrontlineController && frontlineController != card.Owner)
-        {
-            SetStatus("Enemy controls the frontline. Clear it before advancing.");
             return false;
         }
 
@@ -229,7 +229,7 @@ public partial class GameController
             return false;
         }
 
-        float availableOperation;
+        int availableOperation;
         if (!CanSpendUnitOperation(attacker, availableKredits, out availableOperation))
         {
             return false;
@@ -246,38 +246,14 @@ public partial class GameController
             return false;
         }
 
-        bool attackerInSupport = attacker.Zone == CardZone.PlayerSupport || attacker.Zone == CardZone.EnemySupport;
-        bool attackerInFrontline = attacker.Zone == CardZone.Frontline;
-        if (!attackerInSupport && !attackerInFrontline)
+        if (!IsBoardCombatUnit(attacker))
         {
             return false;
         }
 
-        SlotZone enemySupport = attacker.Owner == PlayerSide.Player ? SlotZone.EnemySupport : SlotZone.PlayerSupport;
-        if (attackerInSupport)
-        {
-            if (targetSlot.Zone != SlotZone.Frontline || !targetSlot.IsOccupied || targetSlot.Occupant == null)
-            {
-                return false;
-            }
-
-            if (targetSlot.Occupant.Owner == attacker.Owner || targetSlot.Occupant.HasKeyword(CardKeyword.Smokescreen))
-            {
-                return false;
-            }
-
-            return true;
-        }
-
-        if (targetSlot.Zone != enemySupport && targetSlot.Zone != SlotZone.Frontline)
-        {
-            return false;
-        }
-
-        bool protectedByGuard = IsProtectedByAdjacentGuard(targetSlot, GetOpponentState(attacker.Owner).Side);
         if (targetSlot.IsOccupied)
         {
-            if (targetSlot.Occupant.Owner == attacker.Owner)
+            if (targetSlot.Occupant == null || targetSlot.Occupant.Owner == attacker.Owner)
             {
                 return false;
             }
@@ -287,12 +263,12 @@ public partial class GameController
                 return false;
             }
 
-            return targetSlot.Zone == SlotZone.Frontline
-                || !protectedByGuard
-                || targetSlot.Occupant.HasKeyword(CardKeyword.Guard);
+            bool protectedByGuard = IsProtectedByAdjacentGuard(targetSlot, targetSlot.Occupant.Owner);
+            return !protectedByGuard || targetSlot.Occupant.HasKeyword(CardKeyword.Guard);
         }
 
-        return BoardTargetRules.IsHeadquartersSlot(targetSlot);
+        return BoardTargetRules.IsHeadquartersSlot(targetSlot)
+            && HeadquartersSideForSlot(targetSlot) != attacker.Owner;
     }
 
     private bool IsProtectedByAdjacentGuard(SlotInteract targetSlot, PlayerSide defender)
@@ -302,13 +278,15 @@ public partial class GameController
             return false;
         }
 
-        return IsGuardAt(targetSlot.X - 1, targetSlot.Zone, defender)
-            || IsGuardAt(targetSlot.X + 1, targetSlot.Zone, defender);
+        return IsGuardAt(targetSlot.X - 1, targetSlot.Z, defender)
+            || IsGuardAt(targetSlot.X + 1, targetSlot.Z, defender)
+            || IsGuardAt(targetSlot.X, targetSlot.Z - 1, defender)
+            || IsGuardAt(targetSlot.X, targetSlot.Z + 1, defender);
     }
 
-    private bool IsGuardAt(int x, SlotZone zone, PlayerSide owner)
+    private bool IsGuardAt(int x, int row, PlayerSide owner)
     {
-        SlotInteract slot = board.GetSlot(x, zone);
+        SlotInteract slot = board.GetSlotInRow(x, row);
         return slot != null
             && slot.IsOccupied
             && slot.Occupant != null

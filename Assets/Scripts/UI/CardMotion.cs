@@ -2,6 +2,14 @@ using UnityEngine;
 
 public class CardMotion : MonoBehaviour
 {
+    private enum SpecialMoveKind
+    {
+        None,
+        Deploy,
+        Draw,
+        Discard
+    }
+
     private Vector3 baseScale;
     private Vector3 targetPosition;
     private float spawnElapsed;
@@ -26,7 +34,10 @@ public class CardMotion : MonoBehaviour
     private bool failedReturnActive;
     private bool specialMoveFlips;
     private bool specialMoveHasMid;
+    private SpecialMoveKind specialMoveKind;
     private Vector3 lungeOffset;
+
+    public bool IsSpecialMoveActive => specialMoveActive;
 
     private void Awake()
     {
@@ -67,6 +78,7 @@ public class CardMotion : MonoBehaviour
         specialMoveActive = false;
         specialMoveFlips = false;
         specialMoveHasMid = false;
+        specialMoveKind = SpecialMoveKind.None;
         lungeElapsed = 0f;
         lungeOffset = Vector3.zero;
         targetPosition = currentPosition;
@@ -109,6 +121,7 @@ public class CardMotion : MonoBehaviour
         specialMoveActive = true;
         specialMoveFlips = false;
         specialMoveHasMid = false;
+        specialMoveKind = SpecialMoveKind.Deploy;
         hasTargetPosition = false;
         transform.position = fromPosition;
     }
@@ -130,6 +143,7 @@ public class CardMotion : MonoBehaviour
         specialMoveActive = true;
         specialMoveFlips = true;
         specialMoveHasMid = true;
+        specialMoveKind = SpecialMoveKind.Draw;
         hasTargetPosition = false;
         transform.position = fromPosition;
         transform.rotation = specialMoveStartRotation;
@@ -138,14 +152,23 @@ public class CardMotion : MonoBehaviour
     public void PlayMulliganDiscardFlight(Vector3 fromPosition, Vector3 toPosition)
     {
         specialMoveStart = fromPosition;
+        Vector3 discardDirection = toPosition - fromPosition;
+        discardDirection.y = 0f;
+        if (discardDirection.sqrMagnitude <= 0.001f)
+        {
+            discardDirection = Vector3.forward;
+        }
+
+        specialMoveMid = toPosition + Vector3.up * 0.08f - discardDirection.normalized * CardMotionRules.DiscardTuckDistance;
         specialMoveEnd = toPosition;
         specialMoveStartRotation = transform.rotation;
-        specialMoveEndRotation = transform.rotation;
+        specialMoveEndRotation = transform.rotation * Quaternion.Euler(180f, 0f, 0f);
         specialMoveDuration = CardMotionRules.MulliganDiscardFlightSeconds;
         specialMoveElapsed = 0f;
         specialMoveActive = true;
-        specialMoveFlips = false;
-        specialMoveHasMid = false;
+        specialMoveFlips = true;
+        specialMoveHasMid = true;
+        specialMoveKind = SpecialMoveKind.Discard;
         hasTargetPosition = false;
         transform.position = fromPosition;
     }
@@ -162,6 +185,7 @@ public class CardMotion : MonoBehaviour
         specialMoveActive = false;
         specialMoveFlips = false;
         specialMoveHasMid = false;
+        specialMoveKind = SpecialMoveKind.None;
         hasTargetPosition = false;
         lungeElapsed = 0f;
         lungeOffset = Vector3.zero;
@@ -209,7 +233,7 @@ public class CardMotion : MonoBehaviour
             returnElapsed += Time.deltaTime;
             float linearT = Mathf.Clamp01(returnElapsed / Mathf.Max(0.01f, returnDuration));
             float liftTime = Mathf.Max(0.01f, CardMotionRules.FailedReturnSettleSeconds / returnDuration);
-            float settleTime = 1f - liftTime;
+            float settleTime = Mathf.Max(0.01f, 1f - liftTime);
             float hop;
             Vector3 path;
             if (linearT <= liftTime)
@@ -217,14 +241,15 @@ public class CardMotion : MonoBehaviour
                 float upT = linearT / liftTime;
                 float rise = Mathf.Sin(upT * Mathf.PI * 0.5f);
                 hop = rise * CardMotionRules.FailedReturnSettleHeight;
-                path = Vector3.LerpUnclamped(returnStart, returnEnd, upT * 0.42f);
+                path = Vector3.LerpUnclamped(returnStart, returnEnd, SmoothEase(upT) * 0.32f);
             }
             else
             {
                 float settleT = (linearT - liftTime) / settleTime;
-                float down = 1f - Mathf.Cos(settleT * Mathf.PI * 0.5f);
-                hop = Mathf.Lerp(CardMotionRules.FailedReturnSettleHeight, 0f, down);
-                path = Vector3.LerpUnclamped(returnStart, returnEnd, 0.42f + down * 0.58f);
+                float cruise = 1f - Mathf.Pow(1f - settleT, 2.6f);
+                float settle = SmoothEase(settleT);
+                hop = Mathf.Lerp(CardMotionRules.FailedReturnSettleHeight, 0f, settle);
+                path = Vector3.LerpUnclamped(returnStart, returnEnd, 0.32f + cruise * 0.68f);
             }
 
             path.y += hop + Mathf.Sin(Mathf.PI * linearT) * CardMotionRules.FailedReturnHopHeight;
@@ -244,33 +269,13 @@ public class CardMotion : MonoBehaviour
         {
             specialMoveElapsed += Time.deltaTime;
             float linearT = Mathf.Clamp01(specialMoveElapsed / specialMoveDuration);
-            float t = specialMoveFlips
-                ? SmoothEase(linearT)
-                : DeployImpactEase(linearT);
-            float arc = Mathf.Sin(linearT * Mathf.PI) * (specialMoveFlips ? 0.28f : 0.42f);
-            Vector3 flat;
-            if (specialMoveHasMid)
-            {
-                const float split = 0.68f;
-                if (linearT < split)
-                {
-                    flat = Vector3.LerpUnclamped(specialMoveStart, specialMoveMid, SmoothEase(linearT / split));
-                }
-                else
-                {
-                    flat = Vector3.LerpUnclamped(specialMoveMid, specialMoveEnd, SmoothEase((linearT - split) / (1f - split)));
-                    arc *= 0.45f;
-                }
-            }
-            else
-            {
-                flat = Vector3.LerpUnclamped(specialMoveStart, specialMoveEnd, t);
-            }
-            flat.y += arc;
-            transform.position = flat;
+            transform.position = SpecialMovePosition(linearT);
             if (specialMoveFlips)
             {
-                transform.rotation = Quaternion.Slerp(specialMoveStartRotation, specialMoveEndRotation, linearT);
+                float flipT = specialMoveKind == SpecialMoveKind.Discard
+                    ? VariableSpeedEase(linearT)
+                    : SmoothEase(Mathf.InverseLerp(CardMotionRules.DrawExtractSecondsRatio * 0.45f, 1f, linearT));
+                transform.rotation = Quaternion.Slerp(specialMoveStartRotation, specialMoveEndRotation, flipT);
             }
 
             if (linearT >= 1f)
@@ -278,6 +283,7 @@ public class CardMotion : MonoBehaviour
                 specialMoveActive = false;
                 specialMoveFlips = false;
                 specialMoveHasMid = false;
+                specialMoveKind = SpecialMoveKind.None;
                 transform.rotation = specialMoveEndRotation;
                 ResetBasePosition(specialMoveEnd);
             }
@@ -333,5 +339,89 @@ public class CardMotion : MonoBehaviour
     {
         t = Mathf.Clamp01(t);
         return t * t * (3f - 2f * t);
+    }
+
+    private Vector3 SpecialMovePosition(float linearT)
+    {
+        switch (specialMoveKind)
+        {
+            case SpecialMoveKind.Draw:
+                return DrawMovePosition(linearT);
+            case SpecialMoveKind.Discard:
+                return DiscardMovePosition(linearT);
+            case SpecialMoveKind.Deploy:
+            default:
+                float t = specialMoveFlips ? SmoothEase(linearT) : DeployImpactEase(linearT);
+                Vector3 flat = specialMoveHasMid
+                    ? TwoPartPosition(linearT, 0.68f, SmoothEase)
+                    : Vector3.LerpUnclamped(specialMoveStart, specialMoveEnd, t);
+                flat.y += Mathf.Sin(linearT * Mathf.PI) * (specialMoveFlips ? 0.28f : 0.42f);
+                return flat;
+        }
+    }
+
+    private Vector3 DrawMovePosition(float linearT)
+    {
+        float extractRatio = Mathf.Clamp01(CardMotionRules.DrawExtractSecondsRatio);
+        float settleRatio = Mathf.Clamp01(CardMotionRules.DrawSettleSecondsRatio);
+        float flightEnd = Mathf.Clamp01(1f - settleRatio);
+        Vector3 extractEnd = specialMoveStart + Vector3.up * CardMotionRules.DrawExtractHeight;
+        Vector3 settleStart = specialMoveMid + Vector3.up * CardMotionRules.DrawSettleLift;
+
+        if (linearT < extractRatio)
+        {
+            float t = SmoothEase(linearT / Mathf.Max(0.01f, extractRatio));
+            return Vector3.LerpUnclamped(specialMoveStart, extractEnd, t);
+        }
+
+        if (linearT < flightEnd)
+        {
+            float t = VariableSpeedEase((linearT - extractRatio) / Mathf.Max(0.01f, flightEnd - extractRatio));
+            Vector3 control = (extractEnd + settleStart) * 0.5f + Vector3.up * CardMotionRules.DrawFlightArcHeight;
+            return QuadraticBezier(extractEnd, control, settleStart, t);
+        }
+
+        float settleT = SmoothEase((linearT - flightEnd) / Mathf.Max(0.01f, settleRatio));
+        Vector3 firstSettle = Vector3.LerpUnclamped(settleStart, specialMoveMid, Mathf.Clamp01(settleT * 1.35f));
+        Vector3 secondSettle = Vector3.LerpUnclamped(specialMoveMid, specialMoveEnd, Mathf.Clamp01((settleT - 0.35f) / 0.65f));
+        return settleT < 0.35f ? firstSettle : secondSettle;
+    }
+
+    private Vector3 DiscardMovePosition(float linearT)
+    {
+        const float tuckStart = 0.78f;
+        if (linearT < tuckStart)
+        {
+            float t = VariableSpeedEase(linearT / tuckStart);
+            Vector3 control = (specialMoveStart + specialMoveMid) * 0.5f + Vector3.up * CardMotionRules.DiscardFlightArcHeight;
+            return QuadraticBezier(specialMoveStart, control, specialMoveMid, t);
+        }
+
+        float tuckT = SmoothEase((linearT - tuckStart) / (1f - tuckStart));
+        return Vector3.LerpUnclamped(specialMoveMid, specialMoveEnd, tuckT);
+    }
+
+    private Vector3 TwoPartPosition(float linearT, float split, System.Func<float, float> ease)
+    {
+        if (linearT < split)
+        {
+            return Vector3.LerpUnclamped(specialMoveStart, specialMoveMid, ease(linearT / split));
+        }
+
+        return Vector3.LerpUnclamped(specialMoveMid, specialMoveEnd, ease((linearT - split) / (1f - split)));
+    }
+
+    private static Vector3 QuadraticBezier(Vector3 a, Vector3 b, Vector3 c, float t)
+    {
+        float oneMinusT = 1f - t;
+        return oneMinusT * oneMinusT * a + 2f * oneMinusT * t * b + t * t * c;
+    }
+
+    private static float VariableSpeedEase(float t)
+    {
+        t = Mathf.Clamp01(t);
+        return t < 0.55f
+            ? 0.62f * Mathf.SmoothStep(0f, 1f, t / 0.55f)
+            : Mathf.Lerp(0.62f, 1f, 1f - Mathf.Pow(1f - ((t - 0.55f) / 0.45f), 2.8f));
     }
 }

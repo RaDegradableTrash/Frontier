@@ -29,19 +29,9 @@ public static class SceneHudPromptRules
             return $"NEED {selectedCard.KreditCost}K";
         }
 
-        if (selectedCard.Zone == CardZone.PlayerSupport && hasFrontlineController && frontlineController != selectedCard.Owner)
+        if (selectedCard.Zone == CardZone.PlayerSupport || selectedCard.Zone == CardZone.Frontline || selectedCard.Zone == CardZone.EnemySupport)
         {
-            return "CLEAR FRONTLINE";
-        }
-
-        if (selectedCard.Zone == CardZone.PlayerSupport)
-        {
-            return "ADVANCE";
-        }
-
-        if (selectedCard.Zone == CardZone.Frontline)
-        {
-            return "ATTACK";
+            return "MOVE / ATTACK";
         }
 
         if (selectedCard.Zone == CardZone.Hand && selectedCard.Type == CardType.Countermeasure)

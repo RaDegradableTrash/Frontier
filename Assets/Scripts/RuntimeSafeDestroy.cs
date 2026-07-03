@@ -15,7 +15,17 @@ public static class RuntimeSafeDestroy
         }
         else
         {
-            UnityEngine.Object.DestroyImmediate(target);
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.delayCall += () =>
+            {
+                if (target != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(target);
+                }
+            };
+#else
+            UnityEngine.Object.Destroy(target);
+#endif
         }
     }
 }

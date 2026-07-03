@@ -40,7 +40,7 @@ public class BoardManager : MonoBehaviour
     public float SlotStepX => slotWidth + slotPadding;
     public float SlotStepZ => slotHeight + slotPadding;
 
-    public SlotInteract GetSlotInRow(int row, int x)
+    public SlotInteract GetSlotInRow(int x, int row)
     {
         if (grid == null || row < 0 || row >= grid.GetLength(1) || x < 0 || x >= grid.GetLength(0))
         {
@@ -155,7 +155,11 @@ public class BoardManager : MonoBehaviour
 
     public void TriggerStrike(int x, SlotZone zone)
     {
-        SlotInteract origin = GetSlot(x, zone);
+        TriggerStrike(GetSlot(x, zone));
+    }
+
+    public void TriggerStrike(SlotInteract origin)
+    {
         if (origin == null)
         {
             return;
@@ -204,11 +208,11 @@ public class BoardManager : MonoBehaviour
         grid = new SlotInteract[columns, BoardRows];
 
         float rowSpacing = PlayableSceneRules.SupportRowZ;
-        CreateRow(0, SlotZone.PlayerSupport, columns, -rowSpacing * 2f, PlayableSceneRules.PlayerSlotColor);
-        CreateRow(1, SlotZone.Frontline, columns, -rowSpacing, PlayableSceneRules.FrontlineSlotColor);
-        CreateRow(2, SlotZone.Frontline, columns, 0f, PlayableSceneRules.FrontlineSlotColor);
-        CreateRow(3, SlotZone.Frontline, columns, rowSpacing, PlayableSceneRules.FrontlineSlotColor);
-        CreateRow(4, SlotZone.EnemySupport, columns, rowSpacing * 2f, PlayableSceneRules.EnemySlotColor);
+        CreateRow(0, SlotZone.PlayerSupport, columns, -rowSpacing * 2f, PlayableSceneRules.BoardSlotColor);
+        CreateRow(1, SlotZone.Frontline, columns, -rowSpacing, PlayableSceneRules.BoardSlotColor);
+        CreateRow(2, SlotZone.Frontline, columns, 0f, PlayableSceneRules.BoardSlotColor);
+        CreateRow(3, SlotZone.Frontline, columns, rowSpacing, PlayableSceneRules.BoardSlotColor);
+        CreateRow(4, SlotZone.EnemySupport, columns, rowSpacing * 2f, PlayableSceneRules.BoardSlotColor);
         ConfigureHeadquartersSlot(PlayerSide.Enemy);
         ConfigureHeadquartersSlot(PlayerSide.Player);
         CreateCheckerboardCells();
@@ -408,7 +412,14 @@ public class BoardManager : MonoBehaviour
                 material.mainTexture = skullTexture;
             }
 
-            renderer.material = material;
+            if (Application.isPlaying)
+            {
+                renderer.material = material;
+            }
+            else
+            {
+                renderer.sharedMaterial = material;
+            }
         }
 
         skull.SetActive(false);
@@ -555,8 +566,8 @@ public class BoardManager : MonoBehaviour
 
     private void CreateCheckerboardCells()
     {
-        Color dark = new Color(0.12f, 0.105f, 0.075f, 1f);
-        Color light = new Color(0.17f, 0.145f, 0.095f, 1f);
+        Color dark = new Color(0.105f, 0.112f, 0.112f, 1f);
+        Color light = new Color(0.155f, 0.164f, 0.160f, 1f);
         float rowSpacing = PlayableSceneRules.SupportRowZ;
         CreateCheckerboardRow(0, SlotZone.PlayerSupport, supportColumns, -rowSpacing * 2f, dark, light);
         CreateCheckerboardRow(1, SlotZone.Frontline, frontlineColumns, -rowSpacing, light, dark);
@@ -606,9 +617,7 @@ public class BoardManager : MonoBehaviour
 
     private void CreateBoardLabels()
     {
-        CreateLaneLabel("ENEMY SUPPORT", new Vector3(-3.1f, 0.04f, PlayableSceneRules.SupportRowZ), new Color(1f, 0.55f, 0.55f));
-        CreateLaneLabel("FRONTLINE", new Vector3(-3.1f, 0.04f, 0f), new Color(1f, 0.9f, 0.25f));
-        CreateLaneLabel("YOUR SUPPORT", new Vector3(-3.1f, 0.04f, -PlayableSceneRules.SupportRowZ), new Color(0.55f, 0.78f, 1f));
+        CreateLaneLabel("BATTLE GRID", new Vector3(-3.1f, 0.04f, 0f), new Color(0.76f, 0.82f, 0.76f));
     }
 
     private void CreateLaneLabel(string text, Vector3 localPosition, Color color)

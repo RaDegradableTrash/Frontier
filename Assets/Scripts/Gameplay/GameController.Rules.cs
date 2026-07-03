@@ -117,16 +117,6 @@ public partial class GameController
         return side == PlayerSide.Player ? CardZone.PlayerSupport : CardZone.EnemySupport;
     }
 
-    private int BoardColumnCount()
-    {
-        return board != null ? board.BoardColumnsForAllRows : 7;
-    }
-
-    private int BoardRowCount()
-    {
-        return board != null ? board.BoardRows : 5;
-    }
-
     private bool IsInsideBoard(int row, int col)
     {
         return row >= 0 && row < BoardRowCount() && col >= 0 && col < BoardColumnCount();
@@ -150,12 +140,6 @@ public partial class GameController
                 }
             }
         }
-    }
-
-    private bool IsBoardCombatUnit(RuntimeCard card)
-    {
-        return card != null
-            && (card.Zone == CardZone.PlayerSupport || card.Zone == CardZone.EnemySupport || card.Zone == CardZone.Frontline);
     }
 
     private int UnitScore(RuntimeCard card)
@@ -257,13 +241,6 @@ public partial class GameController
 
         SlotInteract bestUnit = null;
         int bestScore = int.MinValue;
-        SlotInteract frontline = FindHighestPriorityTargetInZone(SlotZone.Frontline, defender);
-        if (frontline != null && IsLegalAttackTarget(attacker, frontline))
-        {
-            bestUnit = frontline;
-            bestScore = TargetPriority(frontline.Occupant) + 6;
-        }
-
         for (int x = 0; x < BoardColumnCount(); x++)
         {
             for (int z = 0; z < BoardRowCount(); z++)
@@ -274,7 +251,7 @@ public partial class GameController
                     continue;
                 }
 
-                if (IsProtectedByAdjacentGuard(slot, defender) && !slot.Occupant.HasKeyword(CardKeyword.Guard))
+                if (!IsLegalAttackTarget(attacker, slot))
                 {
                     continue;
                 }
@@ -299,31 +276,12 @@ public partial class GameController
         }
 
         SlotInteract headquartersTarget = board.GetHeadquartersSlot(defender);
-        return bestUnit ?? headquartersTarget;
+        return bestUnit ?? (IsLegalAttackTarget(attacker, headquartersTarget) ? headquartersTarget : null);
     }
 
     private SlotInteract FindHighestPriorityTarget(PlayerSide owner)
     {
-        SlotInteract best = null;
-        int bestScore = int.MinValue;
-        SlotInteract support = FindHighestPriorityTargetInZone(SupportZoneFor(owner), owner);
-        if (support != null)
-        {
-            best = support;
-            bestScore = TargetPriority(support.Occupant);
-        }
-
-        SlotInteract frontline = FindHighestPriorityTargetInZone(SlotZone.Frontline, owner);
-        if (frontline != null)
-        {
-            int frontlineScore = TargetPriority(frontline.Occupant);
-            if (frontlineScore > bestScore)
-            {
-                best = frontline;
-            }
-        }
-
-        return best;
+        return FindHighestPriorityTargetInZone(SlotZone.Frontline, owner);
     }
 
     private SlotInteract FindHighestPriorityTargetInZone(SlotZone zone, PlayerSide owner)
@@ -355,26 +313,7 @@ public partial class GameController
 
     private SlotInteract FindHighestValueFriendlyUnit(PlayerSide owner)
     {
-        SlotInteract best = null;
-        int bestScore = int.MinValue;
-        SlotInteract support = FindHighestValueFriendlyUnitInZone(SupportZoneFor(owner), owner);
-        if (support != null)
-        {
-            best = support;
-            bestScore = UnitScore(support.Occupant);
-        }
-
-        SlotInteract frontline = FindHighestValueFriendlyUnitInZone(SlotZone.Frontline, owner);
-        if (frontline != null)
-        {
-            int frontlineScore = UnitScore(frontline.Occupant);
-            if (frontlineScore > bestScore)
-            {
-                best = frontline;
-            }
-        }
-
-        return best;
+        return FindHighestValueFriendlyUnitInZone(SlotZone.Frontline, owner);
     }
 
     private SlotInteract FindHighestValueFriendlyUnitInZone(SlotZone zone, PlayerSide owner)
@@ -445,7 +384,7 @@ public partial class GameController
 
         if (BoardTargetRules.IsHeadquartersSlot(slot) && !slot.IsOccupied)
         {
-            PlayerSide headquartersSide = slot.Zone == SlotZone.EnemySupport ? PlayerSide.Enemy : PlayerSide.Player;
+            PlayerSide headquartersSide = HeadquartersSideForSlot(slot);
             return headquartersSide != caster;
         }
 

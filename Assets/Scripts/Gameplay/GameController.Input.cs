@@ -233,7 +233,7 @@ public partial class GameController
                     {
                         TryPlayOrderOnSlot(targetSlot);
                     }
-                    else if (selectedCard.Zone == CardZone.Frontline)
+                    else if (IsBoardCombatUnit(selectedCard))
                     {
                         TryAttack(targetSlot);
                     }
@@ -641,11 +641,8 @@ public partial class GameController
             SlotInteract slot = ResolvePointerOrderSlot(releasePosition, view.Card);
             if (view.Card.EffectType == CardEffectType.DeployWithBlitz)
             {
-                bool played = TryPlayAirborneDeployment(slot);
-                if (played)
-                {
-                    ClearDraggedHandCardIfNeeded(false);
-                }
+                TryPlayAirborneDeployment(slot);
+                ClearDraggedHandCardIfNeeded(false);
                 return;
             }
 
@@ -733,7 +730,7 @@ public partial class GameController
             {
                 if (BoardTargetRules.IsHeadquartersSlot(slot))
                 {
-                    PlayerSide headquartersSide = slot.Zone == SlotZone.EnemySupport ? PlayerSide.Enemy : PlayerSide.Player;
+                    PlayerSide headquartersSide = HeadquartersSideForSlot(slot);
                     SetStatus(SceneGuidanceRules.HeadquartersClickedPrompt(headquartersSide));
                     return;
                 }
@@ -750,7 +747,7 @@ public partial class GameController
 
             if (BoardTargetRules.IsHeadquartersSlot(slot))
             {
-                PlayerSide headquartersSide = slot.Zone == SlotZone.EnemySupport ? PlayerSide.Enemy : PlayerSide.Player;
+                PlayerSide headquartersSide = HeadquartersSideForSlot(slot);
                 bool handUnitCannotDeployToHeadquarters = selectedCard.Zone == CardZone.Hand && selectedCard.Type == CardType.Unit;
                 bool selectedUnitTargetingOwnHeadquarters = selectedCard.Type == CardType.Unit && headquartersSide == selectedCard.Owner;
                 if (handUnitCannotDeployToHeadquarters || selectedUnitTargetingOwnHeadquarters)
@@ -787,7 +784,11 @@ public partial class GameController
 
             if (selectedCard.Type == CardType.Unit)
             {
-                if (slot.IsOccupied && slot.Occupant != null && slot.Occupant.Owner != selectedCard.Owner)
+                if (BoardTargetRules.IsHeadquartersSlot(slot) && HeadquartersSideForSlot(slot) != selectedCard.Owner)
+                {
+                    TryAttack(slot);
+                }
+                else if (slot.IsOccupied && slot.Occupant != null && slot.Occupant.Owner != selectedCard.Owner)
                 {
                     TryAttack(slot);
                 }
@@ -1157,7 +1158,7 @@ public partial class GameController
                 returningView = CreateTransientCardView(order);
                 if (returningView == null)
                 {
-                    return;
+                    yield break;
                 }
 
                 returningView.SetLayout(
@@ -1994,7 +1995,7 @@ public partial class GameController
         private SlotInteract ResolvePointerSlot(Vector3 worldPosition, RuntimeCard attacker)
         {
             SlotInteract slot = board.GetSlot(worldPosition);
-            if (attacker == null || attacker.Zone != CardZone.Frontline || board == null)
+            if (attacker == null || !IsBoardCombatUnit(attacker) || board == null)
             {
                 return slot;
             }

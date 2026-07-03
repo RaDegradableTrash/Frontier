@@ -70,6 +70,7 @@ public partial class GameController : MonoBehaviour
     private string status = "Choose a starter deck.";
     private DragTargetArrow dragTargetArrow;
     private Vector3 lastPointerScreenPosition;
+    private Vector3 lastCameraAnchoredViewOffset;
     private bool hasLastPointerPosition;
     private bool handRevealRefreshNeeded = true;
     private int lastSceneCommandPointerFrame = -1;
@@ -152,6 +153,8 @@ public partial class GameController : MonoBehaviour
             UpdateHandReveal();
             handRevealRefreshNeeded = false;
         }
+
+        RefreshCameraAnchoredViewsIfNeeded(pointerMoved);
 
         lastPointerScreenPosition = currentPointer;
         hasLastPointerPosition = true;
@@ -415,6 +418,11 @@ private void KeepOpeningHand()
             : slot.Zone == SlotZone.EnemySupport
                 ? CardZone.EnemySupport
                 : CardZone.Frontline;
+    }
+
+    private PlayerSide HeadquartersSideForSlot(SlotInteract slot)
+    {
+        return slot != null && slot.Zone == SlotZone.EnemySupport ? PlayerSide.Enemy : PlayerSide.Player;
     }
 
     private int BoardColumnCount()

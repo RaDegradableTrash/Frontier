@@ -34,18 +34,18 @@ public class GameBootstrap : MonoBehaviour
         camera.transform.rotation = Quaternion.Euler(55f, 0f, 0f);
         camera.fieldOfView = 42f;
         camera.clearFlags = CameraClearFlags.SolidColor;
-        camera.backgroundColor = new Color(0.024f, 0.028f, 0.046f, 1f);
+        camera.backgroundColor = new Color(0.006f, 0.008f, 0.012f, 1f);
         if (RenderSettings.skybox == null)
         {
             Material darkSkybox = new Material(Shader.Find("Skybox/6 Sided"));
             if (darkSkybox.HasProperty("_Tint"))
             {
-                darkSkybox.SetColor("_Tint", new Color(0.018f, 0.022f, 0.036f, 1f));
+                darkSkybox.SetColor("_Tint", new Color(0.006f, 0.008f, 0.014f, 1f));
             }
 
             if (darkSkybox.HasProperty("_Exposure"))
             {
-                darkSkybox.SetFloat("_Exposure", 0.45f);
+                darkSkybox.SetFloat("_Exposure", 0.18f);
             }
 
             RenderSettings.skybox = darkSkybox;
@@ -53,12 +53,17 @@ public class GameBootstrap : MonoBehaviour
 
         if (RenderSettings.skybox != null && RenderSettings.skybox.HasProperty("_Tint"))
         {
-            RenderSettings.skybox.SetColor("_Tint", new Color(0.02f, 0.025f, 0.035f, 1f));
+            RenderSettings.skybox.SetColor("_Tint", new Color(0.006f, 0.008f, 0.014f, 1f));
         }
 
-        RenderSettings.ambientSkyColor = new Color(0.018f, 0.022f, 0.03f, 1f);
+        if (RenderSettings.skybox != null && RenderSettings.skybox.HasProperty("_Exposure"))
+        {
+            RenderSettings.skybox.SetFloat("_Exposure", 0.18f);
+        }
+
+        RenderSettings.ambientSkyColor = new Color(0.008f, 0.010f, 0.014f, 1f);
         RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.08f, 0.086f, 0.11f, 1f);
+        RenderSettings.ambientLight = new Color(0.038f, 0.044f, 0.055f, 1f);
 
         if (camera.GetComponent<CameraInteraction>() == null)
         {

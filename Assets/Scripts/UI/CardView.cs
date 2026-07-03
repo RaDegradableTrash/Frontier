@@ -6,6 +6,7 @@ public class CardView : MonoBehaviour
 {
     private const float CardHeight = PlayableSceneRules.HandCardHeight;
     private const float CardWidth = PlayableSceneRules.HandCardWidth;
+    private const float BoardCardSize = PlayableSceneRules.BoardCardSize;
     private const bool UsePrefabVisualsInPlayMode = true;
     private const float DragStartThresholdPixels = 18f;
     private const float DragStartHoldSeconds = 0.02f;
@@ -41,12 +42,14 @@ public class CardView : MonoBehaviour
     private bool isHoldingPlayerHandOpen;
     private bool isSelected;
     private bool isHovered;
+    private bool handBillboardEnabled;
     private bool interactionEnabled = true;
     private bool dragEnabled = true;
     private Vector3 dragStartPosition;
     private Vector3 dragPointerOffsetWorld;
     private Vector3 dragPointerTargetOffsetWorld;
     private Vector3 dragVisualVelocity;
+    private Quaternion layoutRotation = Quaternion.identity;
     private Vector3 pointerDownScreenPosition;
     private Vector3 directClickDownScreenPosition;
     private float pointerDownTime;
@@ -72,6 +75,30 @@ public class CardView : MonoBehaviour
     public RuntimeCard Card => card;
     public bool IsHidden => isHidden;
     public bool UsesHandPrefab => useHandPrefab;
+
+    private static Material EditableMaterial(Renderer renderer)
+    {
+        return renderer == null
+            ? null
+            : Application.isPlaying ? renderer.material : renderer.sharedMaterial;
+    }
+
+    private static void SetEditableMaterial(Renderer renderer, Material material)
+    {
+        if (renderer == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            renderer.material = material;
+        }
+        else
+        {
+            renderer.sharedMaterial = material;
+        }
+    }
 
     public void Initialize(RuntimeCard runtimeCard, GameController owner, bool hidden = false)
     {
@@ -451,7 +478,11 @@ public class CardView : MonoBehaviour
     {
         if (faceRenderer != null && prefabTemplate == null)
         {
-            faceRenderer.material.color = normalColor;
+            Material material = EditableMaterial(faceRenderer);
+            if (material != null && material.HasProperty("_Color"))
+            {
+                material.color = normalColor;
+            }
         }
 
         if (selectionRenderer != null)
@@ -487,6 +518,7 @@ public class CardView : MonoBehaviour
             return;
         }
 
+        handBillboardEnabled = true;
         SetHandDetailPanelsVisible(false);
 
         if (label != null)
@@ -511,25 +543,17 @@ public class CardView : MonoBehaviour
 
         if (attackBadgeLabel != null)
         {
-            attackBadgeLabel.text = string.Empty;
+            attackBadgeLabel.text = card.Type == CardType.Unit ? card.Attack.ToString() : string.Empty;
+            SetTextVisible(attackBadgeLabel, card.Type == CardType.Unit && PlayableSceneRules.HandCardBadgeLabelsEnabled);
         }
 
         if (defenseBadgeLabel != null)
         {
-            defenseBadgeLabel.text = string.Empty;
+            defenseBadgeLabel.text = card.Type == CardType.Unit ? card.CurrentDefense.ToString() : string.Empty;
+            SetTextVisible(defenseBadgeLabel, card.Type == CardType.Unit && PlayableSceneRules.HandCardBadgeLabelsEnabled);
         }
 
-        if (attackLabel != null)
-        {
-            attackLabel.text = card.Type == CardType.Unit ? $"{card.Attack}" : string.Empty;
-            SetTextVisible(attackLabel, card.Type == CardType.Unit);
-        }
-
-        if (defenseLabel != null)
-        {
-            defenseLabel.text = card.Type == CardType.Unit ? $"{card.CurrentDefense}" : string.Empty;
-            SetTextVisible(defenseLabel, card.Type == CardType.Unit);
-        }
+        ApplyHandStatLabels();
 
         if (statusLabel != null)
         {
@@ -556,6 +580,7 @@ public class CardView : MonoBehaviour
             return;
         }
 
+        handBillboardEnabled = true;
         SetHandDetailPanelsVisible(false);
 
         if (label != null)
@@ -581,17 +606,7 @@ public class CardView : MonoBehaviour
             operationBadgeRenderer.enabled = card.Type == CardType.Unit;
         }
 
-        if (attackLabel != null)
-        {
-            attackLabel.text = card.Type == CardType.Unit ? $"{card.Attack}" : string.Empty;
-            SetTextVisible(attackLabel, card.Type == CardType.Unit);
-        }
-
-        if (defenseLabel != null)
-        {
-            defenseLabel.text = card.Type == CardType.Unit ? $"{card.CurrentDefense}" : string.Empty;
-            SetTextVisible(defenseLabel, card.Type == CardType.Unit);
-        }
+        ApplyHandStatLabels();
 
         if (statusLabel != null)
         {
@@ -602,6 +617,7 @@ public class CardView : MonoBehaviour
 
     public void SetDetailPresentation()
     {
+        handBillboardEnabled = false;
         if (card == null || isHidden)
         {
             return;
@@ -653,6 +669,7 @@ public class CardView : MonoBehaviour
 
     public void SetBoardUnitPresentation()
     {
+        handBillboardEnabled = false;
         if (card == null || card.Type != CardType.Unit)
         {
             return;
@@ -715,6 +732,37 @@ public class CardView : MonoBehaviour
         RefreshBoardFuelDots();
     }
 
+    private void ApplyHandStatLabels()
+    {
+        bool showStats = card != null && card.Type == CardType.Unit;
+        string attackText = showStats ? card.Attack.ToString() : string.Empty;
+        string defenseText = showStats ? card.CurrentDefense.ToString() : string.Empty;
+
+        if (attackLabel != null)
+        {
+            attackLabel.text = attackText;
+            SetTextVisible(attackLabel, showStats);
+        }
+
+        if (defenseLabel != null)
+        {
+            defenseLabel.text = defenseText;
+            SetTextVisible(defenseLabel, showStats);
+        }
+
+        if (attackBadgeLabel != null)
+        {
+            attackBadgeLabel.text = attackText;
+            SetTextVisible(attackBadgeLabel, showStats && PlayableSceneRules.HandCardBadgeLabelsEnabled);
+        }
+
+        if (defenseBadgeLabel != null)
+        {
+            defenseBadgeLabel.text = defenseText;
+            SetTextVisible(defenseBadgeLabel, showStats && PlayableSceneRules.HandCardBadgeLabelsEnabled);
+        }
+    }
+
     private void RefreshBoardFuelDots()
     {
         if (card == null || card.Type != CardType.Unit)
@@ -766,6 +814,7 @@ public class CardView : MonoBehaviour
     public void SetLayout(Vector3 position, Vector3 scale, Quaternion rotation, bool animate)
     {
         motion?.SetBaseScale(scale);
+        layoutRotation = rotation;
         if (isDragging)
         {
             hasLayout = true;
@@ -785,6 +834,43 @@ public class CardView : MonoBehaviour
         }
 
         hasLayout = true;
+    }
+
+    private void LateUpdate()
+    {
+        UpdateHandBillboard();
+    }
+
+    private void UpdateHandBillboard()
+    {
+        if (!handBillboardEnabled
+            || isDragging
+            || motion != null && motion.IsSpecialMoveActive
+            || card == null
+            || card.Zone != CardZone.Hand)
+        {
+            return;
+        }
+
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null)
+        {
+            return;
+        }
+
+        Vector3 cameraDirection = mainCamera.transform.position - transform.position;
+        if (cameraDirection.sqrMagnitude <= 0.001f)
+        {
+            return;
+        }
+
+        Vector3 baseNormal = layoutRotation * Vector3.up;
+        Quaternion fullBillboard = Quaternion.FromToRotation(baseNormal, cameraDirection.normalized) * layoutRotation;
+        Quaternion partialBillboard = Quaternion.Slerp(layoutRotation, fullBillboard, PlayableSceneRules.HandBillboardStrength);
+        transform.rotation = Quaternion.Slerp(
+            transform.rotation,
+            partialBillboard,
+            1f - Mathf.Exp(-PlayableSceneRules.HandBillboardLerpSpeed * Time.deltaTime));
     }
 
     public void PlayDeployDrop(Vector3 fromPosition, Vector3 toPosition)
@@ -1348,7 +1434,7 @@ public class CardView : MonoBehaviour
         }
 
         float cardWidth = CardWidth * Mathf.Abs(transform.lossyScale.x);
-        float cardHeight = (IsBoardUnitCard() ? CardWidth : CardHeight) * Mathf.Abs(transform.lossyScale.z);
+        float cardHeight = (IsBoardUnitCard() ? BoardCardSize : CardHeight) * Mathf.Abs(transform.lossyScale.z);
         Vector3 right = transform.right * (cardWidth * 0.5f);
         Vector3 forward = transform.forward * (cardHeight * 0.5f);
         Vector3[] corners =
@@ -1439,21 +1525,20 @@ public class CardView : MonoBehaviour
         pointerRaycastNearestDistance = float.MaxValue;
 
         Ray ray = mainCamera.ScreenPointToRay(screenPointer);
-        int hitCount = Physics.RaycastNonAlloc(ray, PointerRaycastHits, 100f);
-        for (int i = 0; i < hitCount; i++)
+        RaycastHit[] hits = Physics.RaycastAll(ray, 100f);
+        System.Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+        for (int i = 0; i < hits.Length; i++)
         {
-            RaycastHit hit = PointerRaycastHits[i];
+            RaycastHit hit = hits[i];
             CardView hitView = hit.collider != null ? hit.collider.GetComponentInParent<CardView>() : null;
             if (hitView == null || !hitView.CanInteract())
             {
                 continue;
             }
 
-            if (hit.distance < pointerRaycastNearestDistance)
-            {
-                pointerRaycastNearestDistance = hit.distance;
-                pointerRaycastNearestCard = hitView;
-            }
+            pointerRaycastNearestDistance = hit.distance;
+            pointerRaycastNearestCard = hitView;
+            return;
         }
     }
 
@@ -1491,7 +1576,7 @@ public class CardView : MonoBehaviour
     {
         transform.localScale = Vector3.one;
         GetComponent<BoxCollider>().size = IsBoardUnitCard()
-            ? new Vector3(CardWidth, 0.04f, CardWidth)
+            ? new Vector3(BoardCardSize, 0.04f, BoardCardSize)
             : new Vector3(CardWidth, 0.04f, CardHeight);
 
         if (TryBuildVisualsFromPrefab(hidden))
@@ -1555,7 +1640,7 @@ public class CardView : MonoBehaviour
 
     private void BuildRuntimeBoardCard(bool hidden)
     {
-        float boardSize = CardWidth;
+        float boardSize = BoardCardSize;
         Color frame = new Color(0.84f, 0.84f, 0.82f);
         Color interior = hidden ? new Color(0.20f, 0.22f, 0.26f) : new Color(0.98f, 0.98f, 0.97f);
         normalColor = interior;
@@ -1643,7 +1728,7 @@ public class CardView : MonoBehaviour
         prefabTemplate.name = "Card Visual";
         prefabTemplate.transform.localPosition = Vector3.zero;
         prefabTemplate.transform.localRotation = Quaternion.identity;
-        prefabTemplate.transform.localScale = PrefabVisualRootScale();
+        prefabTemplate.transform.localScale = Vector3.one;
         RemoveChildColliders(prefabTemplate.transform);
         ApplyOwnerMetalTint();
 
@@ -1668,18 +1753,35 @@ public class CardView : MonoBehaviour
         statusLabel = prefabTemplate.statusLabel;
         selectionLabel = prefabTemplate.selectionLabel;
 
-        ApplyPrefabRuntimeSizing();
+        ClearPrefabDefaultArtwork();
 
         normalColor = hidden ? new Color(0.15f, 0.18f, 0.25f) : FactionColor(card.Faction);
         if (faceRenderer != null && hidden)
         {
-            faceRenderer.material = ResolveFaceMaterial(hidden);
-            faceRenderer.material.color = normalColor;
+            Material material = ResolveFaceMaterial(hidden);
+            if (Application.isPlaying)
+            {
+                faceRenderer.material = material;
+            }
+            else
+            {
+                faceRenderer.sharedMaterial = material;
+            }
+
+            material = EditableMaterial(faceRenderer);
+            if (material != null && material.HasProperty("_Color"))
+            {
+                material.color = normalColor;
+            }
         }
 
         if (rarityBandRenderer != null && hidden)
         {
-            rarityBandRenderer.material.color = hidden ? new Color(0.35f, 0.38f, 0.46f) : RarityColor(card.Rarity);
+            Material material = EditableMaterial(rarityBandRenderer);
+            if (material != null && material.HasProperty("_Color"))
+            {
+                material.color = hidden ? new Color(0.35f, 0.38f, 0.46f) : RarityColor(card.Rarity);
+            }
         }
 
         if (dragShadowRenderer != null)
@@ -1714,34 +1816,22 @@ public class CardView : MonoBehaviour
         return true;
     }
 
-    private void ApplyPrefabRuntimeSizing()
+    private void ClearPrefabDefaultArtwork()
     {
-        if (prefabTemplate == null)
+        if (primaryArtRenderer != null)
         {
-            return;
+            SetEditableMaterial(primaryArtRenderer, CreateRuntimeTextureMaterial(Color.white));
         }
 
-        MeshRenderer artRenderer = primaryArtRenderer;
-        if (artRenderer == null)
+        if (blurredFrameRenderer != null)
         {
-            return;
+            SetEditableMaterial(blurredFrameRenderer, CreateRuntimeTextureMaterial(Color.clear));
         }
 
-        Vector3 artScale = artRenderer.transform.localScale;
-        float targetAspect = IsBoardUnitCard() ? 1f : PlayableSceneRules.HandCardAspectRatio;
-        if (Mathf.Abs(artScale.z) > 0.001f)
+        if (artFrameRenderer != null)
         {
-            float parentAspectScale = Mathf.Abs(artRenderer.transform.lossyScale.x) > 0.001f
-                ? Mathf.Abs(artRenderer.transform.lossyScale.z / artRenderer.transform.lossyScale.x)
-                : 1f;
-            artScale.x = Mathf.Abs(artScale.z) * targetAspect * parentAspectScale * Mathf.Sign(artScale.x == 0f ? 1f : artScale.x);
-            artRenderer.transform.localScale = artScale;
+            SetEditableMaterial(artFrameRenderer, CreateRuntimeTextureMaterial(Color.clear));
         }
-    }
-
-    private Vector3 PrefabVisualRootScale()
-    {
-        return Vector3.one;
     }
 
     private void ApplyPrefabRuntimeVisibility()
@@ -1827,9 +1917,9 @@ public class CardView : MonoBehaviour
             Texture texture = renderer.sharedMaterial != null && renderer.sharedMaterial.HasProperty("_MainTex")
                 ? renderer.sharedMaterial.mainTexture
                 : null;
-            renderer.material = texture != null
+            SetEditableMaterial(renderer, texture != null
                 ? CreateRuntimeTextureMaterial(color, texture)
-                : CreateRuntimeColorMaterial(color);
+                : CreateRuntimeColorMaterial(color));
         }
     }
 
@@ -1872,11 +1962,6 @@ public class CardView : MonoBehaviour
 
     private Material CreateRuntimeTextureMaterial(Color color, Texture texture)
     {
-        return CreateRuntimeTextureMaterial(color, texture, 1f);
-    }
-
-    private Material CreateRuntimeTextureMaterial(Color color, Texture texture, float targetAspect)
-    {
         Shader shader = Shader.Find("Unlit/Texture");
         if (shader == null)
         {
@@ -1894,34 +1979,8 @@ public class CardView : MonoBehaviour
         {
             material.mainTexture = texture;
             texture.wrapMode = TextureWrapMode.Clamp;
-            ApplyCenterCropUv(material, texture, targetAspect);
         }
         return material;
-    }
-
-    private static void ApplyCenterCropUv(Material material, Texture texture, float targetAspect)
-    {
-        if (material == null || texture == null || targetAspect <= 0.001f || texture.height <= 0)
-        {
-            return;
-        }
-
-        float textureAspect = (float)texture.width / texture.height;
-        Vector2 scale = Vector2.one;
-        Vector2 offset = Vector2.zero;
-        if (textureAspect > targetAspect)
-        {
-            scale.x = targetAspect / textureAspect;
-            offset.x = (1f - scale.x) * 0.5f;
-        }
-        else
-        {
-            scale.y = textureAspect / targetAspect;
-            offset.y = (1f - scale.y) * 0.5f;
-        }
-
-        material.mainTextureScale = scale;
-        material.mainTextureOffset = offset;
     }
 
     private void ApplyCardNameArtwork()
@@ -1933,17 +1992,10 @@ public class CardView : MonoBehaviour
 
         string artKey = ResolveArtworkKeyForCard(card, IsBoardUnitCard());
         Texture2D artTexture = Resources.Load<Texture2D>($"CardArt/{artKey}");
-        Texture2D blurTexture = Resources.Load<Texture2D>($"CardArtBlur/{artKey}");
 
         if (artTexture != null)
         {
             ApplyTexture(primaryArtRenderer, artTexture);
-        }
-
-        if (blurTexture != null && !IsBoardUnitCard())
-        {
-            ApplyTexture(blurredFrameRenderer, blurTexture);
-            ApplyTexture(artFrameRenderer, blurTexture);
         }
     }
 
@@ -1954,23 +2006,11 @@ public class CardView : MonoBehaviour
             return;
         }
 
-        Color color = renderer.material != null && renderer.material.HasProperty("_Color")
-            ? renderer.material.color
+        Material currentMaterial = EditableMaterial(renderer);
+        Color color = currentMaterial != null && currentMaterial.HasProperty("_Color")
+            ? currentMaterial.color
             : Color.white;
-        renderer.material = CreateRuntimeTextureMaterial(color, texture, RendererAspect(renderer));
-    }
-
-    private static float RendererAspect(MeshRenderer renderer)
-    {
-        if (renderer == null)
-        {
-            return 1f;
-        }
-
-        Vector3 scale = renderer.transform.localScale;
-        float width = Mathf.Abs(scale.x);
-        float height = Mathf.Abs(scale.z);
-        return height <= 0.001f ? 1f : Mathf.Max(0.001f, width / height);
+        SetEditableMaterial(renderer, CreateRuntimeTextureMaterial(color, texture));
     }
 
     private static string ResolveArtworkKeyForCard(RuntimeCard runtimeCard, bool forBoardCard)
@@ -2112,7 +2152,7 @@ public class CardView : MonoBehaviour
 
         if (normalized.Contains("airborne") || normalized.Contains("空降"))
         {
-            return FirstExistingArtworkKey(forBoardCard ? new[] { "Airborne_Avator", "Airborne" } : new[] { "Airborne" }, forBoardCard ? "Airborne_Avator" : "Airborne");
+            return FirstExistingArtworkKey(forBoardCard ? new[] { "Airborne_Avator", "M3_Avator", "M3" } : new[] { "Airborne", "M3" }, forBoardCard ? "M3_Avator" : "M3");
         }
 
         if (normalized.Contains("trap") || normalized.Contains("诱饵"))
@@ -2139,7 +2179,7 @@ public class CardView : MonoBehaviour
             }
         }
 
-        return fallback;
+        return EnsureExistingArtworkKey(fallback);
     }
 
     private static string NormalizeArtworkKey(string value)
@@ -2206,7 +2246,11 @@ public class CardView : MonoBehaviour
         Color artColor = Color.Lerp(faceColor, card.Owner == PlayerSide.Enemy ? new Color(0.45f, 0.13f, 0.10f) : new Color(0.68f, 0.70f, 0.66f), 0.45f);
         if (faceRenderer != null)
         {
-            faceRenderer.material.color = faceColor;
+            Material material = EditableMaterial(faceRenderer);
+            if (material != null && material.HasProperty("_Color"))
+            {
+                material.color = faceColor;
+            }
         }
 
         if (prefabTemplate == null)
@@ -2218,7 +2262,8 @@ public class CardView : MonoBehaviour
         MeshRenderer[] renderers = prefabTemplate.GetComponentsInChildren<MeshRenderer>(true);
         foreach (MeshRenderer renderer in renderers)
         {
-            if (renderer == null || renderer.GetComponent<TMP_Text>() != null || renderer.sharedMaterial == null || !renderer.material.HasProperty("_Color"))
+            Material material = EditableMaterial(renderer);
+            if (renderer == null || renderer.GetComponent<TMP_Text>() != null || material == null || !material.HasProperty("_Color"))
             {
                 continue;
             }
@@ -2226,11 +2271,11 @@ public class CardView : MonoBehaviour
             string objectName = renderer.gameObject.name.ToLowerInvariant();
             if (objectName.Contains("art") || objectName.Contains("panel"))
             {
-                renderer.material.color = artColor;
+                material.color = artColor;
             }
             else if (objectName.Contains("face") || objectName.Contains("paper") || objectName.Contains("body"))
             {
-                renderer.material.color = faceColor;
+                material.color = faceColor;
             }
         }
 
@@ -2373,7 +2418,7 @@ public class CardView : MonoBehaviour
         RuntimeSafeDestroy.Destroy(panel.GetComponent<Collider>());
 
         MeshRenderer renderer = panel.GetComponent<MeshRenderer>();
-        renderer.material = CreateRuntimeColorMaterial(color);
+        SetEditableMaterial(renderer, CreateRuntimeColorMaterial(color));
         return renderer;
     }
 
@@ -2387,7 +2432,7 @@ public class CardView : MonoBehaviour
         filter.mesh = RuntimeQuadMesh(width, height);
 
         MeshRenderer renderer = panel.AddComponent<MeshRenderer>();
-        renderer.material = CreateRuntimeTextureMaterial(color);
+        SetEditableMaterial(renderer, CreateRuntimeTextureMaterial(color));
         return renderer;
     }
 
@@ -2401,7 +2446,7 @@ public class CardView : MonoBehaviour
         filter.mesh = RuntimeEllipseMesh(radiusX, radiusZ);
 
         MeshRenderer renderer = panel.AddComponent<MeshRenderer>();
-        renderer.material = CreateRuntimeColorMaterial(color);
+        SetEditableMaterial(renderer, CreateRuntimeColorMaterial(color));
         return renderer;
     }
 
@@ -2415,7 +2460,7 @@ public class CardView : MonoBehaviour
         filter.mesh = RuntimeArcMesh(radiusX, radiusZ, startDegrees, endDegrees);
 
         MeshRenderer renderer = panel.AddComponent<MeshRenderer>();
-        renderer.material = CreateRuntimeColorMaterial(color);
+        SetEditableMaterial(renderer, CreateRuntimeColorMaterial(color));
         return renderer;
     }
 
@@ -2542,24 +2587,38 @@ public class CardView : MonoBehaviour
             return;
         }
 
-        discardOverlay = FindFirstChildTransform(transform, "Mulligan Discard Overlay").gameObject;
-        if (discardOverlay == null)
+        Transform overlayTransform = FindFirstChildTransform(transform, "Mulligan Discard Overlay");
+        if (overlayTransform == null)
         {
-            return;
+            discardOverlayRenderer = CreateImagePanel(
+                "Mulligan Discard Overlay",
+                new Vector3(0f, 0.128f, 0f),
+                CardWidth * 0.72f,
+                CardHeight * 0.72f,
+                new Color(1f, 0.18f, 0.08f, 0.72f));
+            discardOverlay = discardOverlayRenderer.gameObject;
+        }
+        else
+        {
+            discardOverlay = overlayTransform.gameObject;
+            discardOverlayRenderer = discardOverlay.GetComponent<MeshRenderer>();
         }
 
-        discardOverlayRenderer = discardOverlay.GetComponent<MeshRenderer>();
         if (discardOverlayRenderer != null)
         {
-            discardOverlayRenderer.material = discardOverlayRenderer.material != null
-                ? discardOverlayRenderer.material
-                : CreateRuntimeTextureMaterial(Color.white);
+            Material material = EditableMaterial(discardOverlayRenderer);
+            if (material == null)
+            {
+                material = CreateRuntimeTextureMaterial(Color.white);
+                SetEditableMaterial(discardOverlayRenderer, material);
+            }
+
             Texture2D discardTexture = SceneIconRegistry.Active != null
                 ? SceneIconRegistry.Active.DiscardThisCardIcon
                 : Resources.Load<Texture2D>("Icons/DiscardThisCard");
             if (discardTexture != null)
             {
-                discardOverlayRenderer.material.mainTexture = discardTexture;
+                material.mainTexture = discardTexture;
             }
         }
 
@@ -2610,15 +2669,19 @@ public class CardView : MonoBehaviour
         damagePreviewSkullRenderer = damagePreviewSkullObject.GetComponent<MeshRenderer>();
         if (damagePreviewSkullRenderer != null)
         {
-            damagePreviewSkullRenderer.material = damagePreviewSkullRenderer.material != null
-                ? damagePreviewSkullRenderer.material
-                : CreateRuntimeTextureMaterial(Color.white);
+            Material material = EditableMaterial(damagePreviewSkullRenderer);
+            if (material == null)
+            {
+                material = CreateRuntimeTextureMaterial(Color.white);
+                SetEditableMaterial(damagePreviewSkullRenderer, material);
+            }
+
             Texture2D skullTexture = SceneIconRegistry.Active != null
                 ? SceneIconRegistry.Active.EstimatedDeathSkullIcon
                 : Resources.Load<Texture2D>("Icons/EstimatedDeathSkull");
             if (skullTexture != null)
             {
-                damagePreviewSkullRenderer.material.mainTexture = skullTexture;
+                material.mainTexture = skullTexture;
             }
         }
 
@@ -2653,16 +2716,22 @@ public class CardView : MonoBehaviour
         MeshRenderer renderer = iconObject.GetComponent<MeshRenderer>();
         if (renderer != null)
         {
-            renderer.material = renderer.material != null ? renderer.material : CreateRuntimeTextureMaterial(Color.white);
+            Material material = EditableMaterial(renderer);
+            if (material == null)
+            {
+                material = CreateRuntimeTextureMaterial(Color.white);
+                SetEditableMaterial(renderer, material);
+            }
+
             Texture2D iconTexture = KeywordIconTexture(keyword);
             if (iconTexture != null)
             {
-                renderer.material.mainTexture = iconTexture;
-                renderer.material.color = Color.white;
+                material.mainTexture = iconTexture;
+                material.color = Color.white;
             }
             else
             {
-                renderer.material.color = KeywordIconColor(keyword);
+                material.color = KeywordIconColor(keyword);
             }
         }
 

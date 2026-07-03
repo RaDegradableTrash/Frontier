@@ -7,15 +7,22 @@ public static class CardMotionRules
     public const float AttackLungeDistanceRatio = 0.24f;
     public const float AttackLungeReturnSeconds = 0.22f;
     public const float DeployDropSeconds = 0.46f;
-    public const float DrawFlightSeconds = 0.42f;
-    public const float MulliganDiscardFlightSeconds = 0.38f;
-    public const float FailedReturnSeconds = 0.68f;
-    public const float FailedReturnHopHeight = 0.18f;
-    public const float FailedReturnSettleHeight = 0.12f;
-    public const float FailedReturnSettleSeconds = 0.28f;
+    public const float DrawFlightSeconds = 0.86f;
+    public const float MulliganDiscardFlightSeconds = 0.62f;
+    public const float DrawExtractSecondsRatio = 0.22f;
+    public const float DrawSettleSecondsRatio = 0.24f;
+    public const float DrawExtractHeight = 0.36f;
+    public const float DrawFlightArcHeight = 0.72f;
+    public const float DrawSettleLift = 0.18f;
+    public const float DiscardFlightArcHeight = 0.54f;
+    public const float DiscardTuckDistance = 0.34f;
+    public const float FailedReturnSeconds = 0.92f;
+    public const float FailedReturnHopHeight = 0.24f;
+    public const float FailedReturnSettleHeight = 0.20f;
+    public const float FailedReturnSettleSeconds = 0.34f;
     public const float SelectedScaleMultiplier = 1.03f;
     public const float HoverScaleMultiplier = 1.04f;
-    public const float HoverLift = 0.12f;
+    public const float HoverLift = 0.20f;
 
     public static bool ShouldSnapToTarget(float distance)
     {

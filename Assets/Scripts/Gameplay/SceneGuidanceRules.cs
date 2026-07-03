@@ -21,7 +21,7 @@ public static class SceneGuidanceRules
 
     public static string HelpPrompt()
     {
-        return "HELP — CLICK/DRAG CARDS. N AUTO-ACTION. P/A/F PLAY/ADVANCE/ATTACK. SPACE END TURN.";
+        return "HELP — CLICK/DRAG CARDS. N AUTO-ACTION. P/A/F PLAY/MOVE/ATTACK. SPACE END TURN.";
     }
 
     public static string BlockedInteractionPrompt(GamePhase phase, PlayerSide activeSide)
@@ -98,14 +98,9 @@ public static class SceneGuidanceRules
             return $"SELECTED {ShortName(selectedCard)} — NEED {selectedCard.KreditCost} KREDITS";
         }
 
-        if (selectedCard.Zone == CardZone.Hand && selectedCard.Type == CardType.Unit && selectedCard.HasKeyword(CardKeyword.Mobilize))
+        if (selectedCard.Zone == CardZone.Hand && selectedCard.Type == CardType.Unit)
         {
-            if (hasFrontlineController && frontlineController != selectedCard.Owner)
-            {
-                return $"SELECTED {ShortName(selectedCard)} — CLICK DEPLOY HERE. ENEMY CONTROLS FRONTLINE.";
-            }
-
-            return $"SELECTED {ShortName(selectedCard)} — CLICK DEPLOY HERE OR MOBILIZE";
+            return $"SELECTED {ShortName(selectedCard)} — CLICK ANY EMPTY GRID SLOT TO DEPLOY";
         }
 
         if (selectedCard.Zone == CardZone.Countermeasure)
@@ -125,22 +120,7 @@ public static class SceneGuidanceRules
                 : $"SELECTED {ShortName(selectedCard)} — CLICK BOARD TO PLAY";
         }
 
-        if (selectedCard.Zone == CardZone.PlayerSupport && !selectedCard.CanOperate(availableKredits))
-        {
-            return $"SELECTED {ShortName(selectedCard)} — {CannotAttackPrompt(selectedCard, availableKredits)}";
-        }
-
-        if (selectedCard.Zone == CardZone.PlayerSupport && hasFrontlineController && frontlineController != selectedCard.Owner)
-        {
-            return $"SELECTED {ShortName(selectedCard)} — CLICK ENEMY FRONTLINE UNIT TO ATTACK, OR CLEAR FRONTLINE BEFORE ADVANCING.";
-        }
-
-        if (selectedCard.Zone == CardZone.PlayerSupport)
-        {
-            return $"SELECTED {ShortName(selectedCard)} — CLICK ENEMY FRONTLINE UNIT TO ATTACK OR EMPTY FRONTLINE TO ADVANCE";
-        }
-
-        if (selectedCard.Zone == CardZone.Frontline)
+        if (selectedCard.Zone == CardZone.PlayerSupport || selectedCard.Zone == CardZone.Frontline || selectedCard.Zone == CardZone.EnemySupport)
         {
             int maxAttacks = selectedCard.HasKeyword(CardKeyword.Fury) ? 2 : 1;
             if (selectedCard.HasKeyword(CardKeyword.Pinned) || selectedCard.OperationCost > availableKredits || selectedCard.AttacksThisTurn >= maxAttacks)
@@ -148,7 +128,7 @@ public static class SceneGuidanceRules
                 return $"SELECTED {ShortName(selectedCard)} — {CannotAttackPrompt(selectedCard, availableKredits)}";
             }
 
-            return $"SELECTED {ShortName(selectedCard)} — CLICK ATTACK TARGET OR HQ";
+            return $"SELECTED {ShortName(selectedCard)} — CLICK EMPTY GRID TO MOVE OR ENEMY TO ATTACK";
         }
 
         string label = SlotHighlightLabelRules.LabelFor(selectedCard, PreferredTargetZone(selectedCard));
@@ -159,7 +139,7 @@ public static class SceneGuidanceRules
     {
         if (card != null && card.HasKeyword(CardKeyword.Blitz))
         {
-            return $"{ShortName(card)} DEPLOYED. NEXT: SELECT A SUPPORT UNIT TO ADVANCE, PLAY ANOTHER CARD, OR END TURN.";
+            return $"{ShortName(card)} DEPLOYED. NEXT: SELECT A UNIT TO MOVE OR ATTACK, PLAY ANOTHER CARD, OR END TURN.";
         }
 
         return $"{ShortName(card)} DEPLOYED. NEXT: THIS UNIT CAN ACT NEXT TURN. PLAY ANOTHER CARD OR END TURN.";
@@ -223,20 +203,10 @@ public static class SceneGuidanceRules
 
         if (targetZone == SlotZone.PlayerSupport)
         {
-            return $"{ShortName(card)} CAN DEPLOY TO EMPTY SUPPORT SLOTS.";
+            return $"{ShortName(card)} CAN DEPLOY TO ANY EMPTY GRID SLOT.";
         }
 
-        if (!card.HasKeyword(CardKeyword.Mobilize))
-        {
-            return $"{ShortName(card)} DEPLOYS TO SUPPORT. ONLY MOBILIZE UNITS CAN ENTER FRONTLINE DIRECTLY.";
-        }
-
-        if (targetZone == SlotZone.Frontline && hasFrontlineController && frontlineController != card.Owner)
-        {
-            return $"{ShortName(card)} CANNOT MOBILIZE — ENEMY CONTROLS THE FRONTLINE.";
-        }
-
-        return $"{ShortName(card)} CAN DEPLOY TO EMPTY SUPPORT OR CONTROLLED FRONTLINE SLOTS.";
+        return $"{ShortName(card)} CAN DEPLOY TO ANY EMPTY GRID SLOT.";
     }
 
     public static string CannotAffordCardPrompt(RuntimeCard card, string action, int availableKredits)
@@ -258,7 +228,7 @@ public static class SceneGuidanceRules
     public static string HeadquartersClickedPrompt(PlayerSide side)
     {
         return side == PlayerSide.Enemy
-            ? "ENEMY HQ — SELECT A FRONTLINE UNIT, THEN CLICK HQ TO ATTACK."
+            ? "ENEMY HQ — SELECT A UNIT, THEN CLICK HQ TO ATTACK."
             : "YOUR HQ — DEFEND IT. ENEMY UNITS ATTACK THIS SLOT.";
     }
 
@@ -267,11 +237,11 @@ public static class SceneGuidanceRules
         switch (zone)
         {
             case SlotZone.PlayerSupport:
-                return "EMPTY SUPPORT SLOT — SELECT A HAND UNIT, THEN CLICK HERE TO DEPLOY.";
+                return "EMPTY GRID SLOT — SELECT A HAND UNIT TO DEPLOY OR A BOARD UNIT TO MOVE.";
             case SlotZone.Frontline:
-                return "EMPTY FRONTLINE SLOT — SELECT A SUPPORT UNIT TO ADVANCE OR A MOBILIZE UNIT.";
+                return "EMPTY GRID SLOT — SELECT A HAND UNIT TO DEPLOY OR A BOARD UNIT TO MOVE.";
             case SlotZone.EnemySupport:
-                return "EMPTY ENEMY SUPPORT SLOT — ENEMY UNITS DEPLOY HERE.";
+                return "EMPTY GRID SLOT — SELECT A HAND UNIT TO DEPLOY OR A BOARD UNIT TO MOVE.";
             default:
                 return "EMPTY SLOT — SELECT A CARD FIRST.";
         }
@@ -289,12 +259,8 @@ public static class SceneGuidanceRules
             return $"{ShortName(selectedCard)} CANNOT DEPLOY TO HQ — HQ IS NOT A DEPLOY SLOT.";
         }
 
-        if (selectedCard.Zone == CardZone.PlayerSupport)
-        {
-            return $"{ShortName(selectedCard)} MUST ADVANCE TO FRONTLINE BEFORE ATTACKING HQ.";
-        }
-
-        if (selectedCard.Zone == CardZone.Frontline && headquartersSide == selectedCard.Owner)
+        if ((selectedCard.Zone == CardZone.PlayerSupport || selectedCard.Zone == CardZone.Frontline || selectedCard.Zone == CardZone.EnemySupport)
+            && headquartersSide == selectedCard.Owner)
         {
             return $"{ShortName(selectedCard)} CANNOT ATTACK YOUR HQ — CLICK ENEMY HQ OR ENEMY UNIT.";
         }
@@ -304,7 +270,7 @@ public static class SceneGuidanceRules
 
     public static string OpponentCardClickedPrompt(RuntimeCard card)
     {
-        return $"INSPECTING ENEMY {ShortName(card)} — SELECT AN ORDER OR FRONTLINE UNIT TO TARGET IT.";
+        return $"INSPECTING ENEMY {ShortName(card)} — SELECT AN ORDER OR UNIT TO TARGET IT.";
     }
 
     public static string IllegalOpponentCardTargetPrompt(RuntimeCard selectedCard, RuntimeCard targetCard)
@@ -316,12 +282,7 @@ public static class SceneGuidanceRules
 
         if (selectedCard.Zone == CardZone.Hand && selectedCard.Type == CardType.Unit)
         {
-            return $"{ShortName(selectedCard)} CANNOT TARGET ENEMY CARDS — DEPLOY TO SUPPORT FIRST.";
-        }
-
-        if (selectedCard.Zone == CardZone.PlayerSupport)
-        {
-            return $"{ShortName(selectedCard)} CANNOT ATTACK FROM SUPPORT — ADVANCE TO FRONTLINE FIRST.";
+            return $"{ShortName(selectedCard)} CANNOT TARGET ENEMY CARDS — DEPLOY IT TO THE GRID FIRST.";
         }
 
         return $"{ShortName(selectedCard)} CANNOT TARGET {ShortName(targetCard)} THIS WAY.";
@@ -329,7 +290,7 @@ public static class SceneGuidanceRules
 
     public static string OwnCardClickedWhileHandUnitSelectedPrompt(RuntimeCard selectedCard, RuntimeCard targetCard)
     {
-        return $"{ShortName(targetCard)} SLOT IS OCCUPIED — DEPLOY {ShortName(selectedCard)} TO AN EMPTY SUPPORT SLOT.";
+        return $"{ShortName(targetCard)} SLOT IS OCCUPIED — DEPLOY {ShortName(selectedCard)} TO AN EMPTY GRID SLOT.";
     }
 
     public static string MissedDragTargetPrompt(RuntimeCard selectedCard)
@@ -351,7 +312,7 @@ public static class SceneGuidanceRules
 
         if (supportFull)
         {
-            return "NO PLAYABLE UNIT — SUPPORT LINE IS FULL.";
+            return "NO PLAYABLE UNIT — GRID IS FULL.";
         }
 
         if (missingOrderTarget)
@@ -366,42 +327,37 @@ public static class SceneGuidanceRules
     {
         if (frontlineFull)
         {
-            return "NO ADVANCE — FRONTLINE IS FULL.";
+            return "NO MOVE — GRID IS FULL.";
         }
 
         if (!hasSupportUnit)
         {
-            return "NO ADVANCE — NO SUPPORT UNIT TO ADVANCE.";
-        }
-
-        if (frontlineBlocked)
-        {
-            return "NO ADVANCE — ENEMY CONTROLS THE FRONTLINE.";
+            return "NO MOVE — NO READY UNIT.";
         }
 
         if (needsKredits)
         {
-            return "NO ADVANCE — NEED MORE KREDITS.";
+            return "NO MOVE — NEED MORE KREDITS.";
         }
 
         if (pinned)
         {
-            return "NO ADVANCE — SUPPORT UNIT IS PINNED.";
+            return "NO MOVE — UNIT IS PINNED.";
         }
 
         if (alreadyActed)
         {
-            return "NO ADVANCE — SUPPORT UNIT ALREADY ACTED.";
+            return "NO MOVE — UNIT ALREADY ACTED.";
         }
 
-        return "NO ADVANCE — SELECT A READY SUPPORT UNIT.";
+        return "NO MOVE — SELECT A READY UNIT.";
     }
 
     public static string NoAttackShortcutPrompt(bool hasFrontlineUnit, bool needsKredits, bool pinned, bool alreadyAttacked, bool missingTarget)
     {
         if (!hasFrontlineUnit)
         {
-            return "NO ATTACK — NO FRONTLINE UNIT TO ATTACK WITH.";
+            return "NO ATTACK — NO READY UNIT TO ATTACK WITH.";
         }
 
         if (needsKredits)
@@ -411,12 +367,12 @@ public static class SceneGuidanceRules
 
         if (pinned)
         {
-            return "NO ATTACK — FRONTLINE UNIT IS PINNED.";
+            return "NO ATTACK — UNIT IS PINNED.";
         }
 
         if (alreadyAttacked)
         {
-            return "NO ATTACK — FRONTLINE UNIT ALREADY ATTACKED.";
+            return "NO ATTACK — UNIT ALREADY ATTACKED.";
         }
 
         if (missingTarget)
@@ -424,7 +380,7 @@ public static class SceneGuidanceRules
             return "NO ATTACK — NO LEGAL ATTACK TARGET.";
         }
 
-        return "NO ATTACK — SELECT A READY FRONTLINE UNIT.";
+        return "NO ATTACK — SELECT A READY UNIT.";
     }
 
     public static string AfterAdvancePrompt(RuntimeCard card)
@@ -436,7 +392,7 @@ public static class SceneGuidanceRules
     {
         if (card == null || card.Type != CardType.Unit)
         {
-            return "SELECT A SUPPORT UNIT TO ADVANCE.";
+            return "SELECT A UNIT TO MOVE.";
         }
 
         if (card.HasKeyword(CardKeyword.Pinned))
@@ -451,20 +407,20 @@ public static class SceneGuidanceRules
 
         if (card.OperationCost > availableKredits)
         {
-            return $"{ShortName(card)} NEED {card.OperationCost} KREDITS TO ADVANCE.";
+            return $"{ShortName(card)} NEED {card.OperationCost} KREDITS TO MOVE.";
         }
 
-        return $"{ShortName(card)} CANNOT ADVANCE NOW.";
+        return $"{ShortName(card)} CANNOT MOVE NOW.";
     }
 
     public static string AfterAdvancePrompt(RuntimeCard card, int remainingKredits)
     {
         if (card != null && card.OperationCost > remainingKredits)
         {
-            return $"{ShortName(card)} ADVANCED. NEXT: NEED {card.OperationCost} KREDITS TO ATTACK, OR END TURN.";
+            return $"{ShortName(card)} MOVED. NEXT: NEED {card.OperationCost} KREDITS TO ATTACK, OR END TURN.";
         }
 
-        return $"{ShortName(card)} ADVANCED. NEXT: SELECT A FRONTLINE UNIT TO ATTACK, OR END TURN.";
+        return $"{ShortName(card)} MOVED. NEXT: SELECT A UNIT TO ATTACK, OR END TURN.";
     }
 
     public static string AfterAttackPrompt(RuntimeCard card)
@@ -476,12 +432,7 @@ public static class SceneGuidanceRules
     {
         if (card == null || card.Type != CardType.Unit)
         {
-            return "SELECT A FRONTLINE UNIT TO ATTACK.";
-        }
-
-        if (card.Zone != CardZone.Frontline)
-        {
-            return $"{ShortName(card)} MUST ADVANCE TO FRONTLINE BEFORE ATTACKING.";
+            return "SELECT A UNIT TO ATTACK.";
         }
 
         if (card.HasKeyword(CardKeyword.Pinned))
@@ -507,13 +458,7 @@ public static class SceneGuidanceRules
     {
         if (attacker == null || attacker.Type != CardType.Unit)
         {
-            return "SELECT A FRONTLINE UNIT TO ATTACK.";
-        }
-
-        SlotZone enemySupport = attacker.Owner == PlayerSide.Player ? SlotZone.EnemySupport : SlotZone.PlayerSupport;
-        if (targetZone != enemySupport)
-        {
-            return $"{ShortName(attacker)} ATTACKS ENEMY SUPPORT OR HQ, NOT THIS LANE.";
+            return "SELECT A UNIT TO ATTACK.";
         }
 
         if (targetCard != null && targetCard.Owner == attacker.Owner)

@@ -339,6 +339,30 @@ public static class DeskContourTerrainMenu
         Selection.activeGameObject = tabletop;
     }
 
+    [MenuItem("Frontier/Generate/Sci-Fi Contour Terrain/暗底白线重建牌桌背景（推荐）")]
+    public static void ApplyDarkBottomWhiteLineBackdropNow()
+    {
+        GameObject tabletop = GameObject.Find("DesktopQuad");
+        if (tabletop == null)
+        {
+            EditorUtility.DisplayDialog(
+                "桌布未找到",
+                "当前场景中未找到名为 DesktopQuad 的对象。",
+                "OK");
+            return;
+        }
+
+        DeskContourTerrainGenerator generator = tabletop.GetComponent<DeskContourTerrainGenerator>();
+        if (generator == null)
+        {
+            generator = tabletop.AddComponent<DeskContourTerrainGenerator>();
+        }
+
+        Undo.RegisterFullObjectHierarchyUndo(tabletop, "Apply Dark Bottom White-Line Contour On Tabletop");
+        generator.ApplyDarkBottomWhiteLineTabletopPreset();
+        Selection.activeGameObject = tabletop;
+    }
+
     [MenuItem("Frontier/Generate/Sci-Fi Contour Terrain/强制重建并显示牌桌背景")]
     public static void ForceRebuildAndShowTabletopBackdrop()
     {

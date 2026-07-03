@@ -30,13 +30,8 @@ public static class DeskContourAutoBootstrap
             generator = Undo.AddComponent<DeskContourTerrainGenerator>(tabletop);
         }
 
-        if (!generator.IsTablePresetApplied
-            || !generator.HasGeneratedTexture
-            || generator.CurrentContourStyle != DeskContourTerrainGenerator.ContourStyle.ReferenceMatchBackdrop)
-        {
-            generator.ApplyReferenceMatchBackdropPresetReferenceImageMatchTarget();
-            Debug.Log("[DeskContourBootstrap] Auto-applied Reference Match Backdrop preset to DesktopQuad.");
-            EditorUtility.SetDirty(tabletop);
-        }
+        generator.ApplyDarkBottomWhiteLineTabletopPreset();
+        Debug.Log("[DeskContourBootstrap] Auto-applied dark-bottom white-line backdrop to DesktopQuad.");
+        EditorUtility.SetDirty(tabletop);
     }
 }

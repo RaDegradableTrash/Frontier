@@ -87,7 +87,8 @@ public partial class GameController
             }
 
             PlayMulliganDiscardFlights(markedCards, discardFlightStarts);
-            for (int i = 0; i < markedCards.Count; i++)
+            int cardsToDraw = Mathf.Max(0, openingHandSize - player.Hand.Count);
+            for (int i = 0; i < cardsToDraw; i++)
             {
                 DrawCard(player);
             }

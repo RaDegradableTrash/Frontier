@@ -8,7 +8,7 @@ public static class CardInspectorTextRules
             "CARD INTEL\n" +
             "1. HOVER BOTTOM EDGE to raise your hand.\n" +
             "2. CLICK any visible card to inspect it.\n" +
-            "3. DRAG UNITS to YOUR SUPPORT.\n" +
+            "3. DRAG UNITS to ANY EMPTY GRID SLOT.\n" +
             "4. CLICK SET COUNTERS to check them.";
     }
 
@@ -58,11 +58,11 @@ public static class CardInspectorTextRules
             case CardZone.Discard:
                 return "DISCARD";
             case CardZone.PlayerSupport:
-                return "YOUR SUPPORT";
+                return "BOARD";
             case CardZone.EnemySupport:
-                return "ENEMY SUPPORT";
+                return "BOARD";
             case CardZone.Frontline:
-                return "FRONTLINE";
+                return "BOARD";
             case CardZone.Countermeasure:
                 return "SET COUNTER";
             default:

@@ -9,6 +9,8 @@ public class DeskContourTerrainGenerator : MonoBehaviour
     private const string SavedReferenceBackdropPresetKey = "DeskContourTerrainGenerator.ReferenceBackdropPreset.V1";
     private const int ReferenceBackdropStableSeed = 982741;
     private const int ReferenceBackdropRenderQueue = 2050;
+    private const string ContourLineOverlayName = "DarkWhiteContourLineOverlay";
+    private const string ContourTextureOverlayName = "DarkWhiteContourTextureOverlay";
 
     public enum ContourStyle
     {
@@ -95,6 +97,11 @@ public class DeskContourTerrainGenerator : MonoBehaviour
     private Texture2D generatedTexture;
     private Sprite generatedSprite;
     private Material generatedMaterial;
+    private GameObject contourLineOverlay;
+    private Material contourLineOverlayMaterial;
+    private GameObject contourTextureOverlay;
+    private Material contourTextureOverlayMaterial;
+    private Texture2D contourTextureOverlayTexture;
     [SerializeField, HideInInspector] private bool tablePresetApplied;
     [SerializeField, HideInInspector] private int latestSeed = 12345;
     [SerializeField, HideInInspector] private bool latestSeedInitialized = false;
@@ -157,6 +164,14 @@ public class DeskContourTerrainGenerator : MonoBehaviour
             RepairTabletopBackdropTransform();
             BuildHeightField();
             ApplyTexture(BuildTexture());
+            if (contourStyle == ContourStyle.ReferenceMatchBackdrop)
+            {
+                RebuildContourLineOverlay();
+            }
+            else
+            {
+                ClearContourLineOverlay();
+            }
         }
         finally
         {
@@ -646,24 +661,36 @@ public class DeskContourTerrainGenerator : MonoBehaviour
     public void ApplyReferenceMatchBackdropWhiteLineDarkPreset()
     {
         ApplyReferenceMatchBackdropPresetReferenceImageExact();
-        contourLayers = 40;
-        lineWidth = 0.016f;
-        lineSoftness = 0.88f;
+        contourLayers = 18;
+        lineWidth = 0.018f;
+        lineSoftness = 0.12f;
         contourBias = 0.10f;
         contourColor = Color.white;
-        glowColor = new Color(1f, 1f, 1f, 0.38f);
-        baseScale = 98f;
-        flowScale = 2.95f;
-        rimRadius = 1.60f;
-        rimIntensity = 1.08f;
-        contrast = 1.08f;
-        emissiveBoost = 0.32f;
-        backgroundColorLow = new Color(0.0012f, 0.0018f, 0.0025f, 1f);
-        backgroundColorHigh = new Color(0.010f, 0.013f, 0.018f, 1f);
+        glowColor = new Color(1f, 1f, 1f, 0.30f);
+        baseScale = 36f;
+        flowScale = 1.35f;
+        rimRadius = 1.42f;
+        rimIntensity = 0.92f;
+        contrast = 1.0f;
+        emissiveBoost = 0.38f;
+        octaves = 4;
+        noiseWarp = 0.18f;
+        backgroundColorLow = new Color(0.0010f, 0.0012f, 0.0016f, 1f);
+        backgroundColorHigh = new Color(0.014f, 0.017f, 0.022f, 1f);
         contourStyle = ContourStyle.ReferenceMatchBackdrop;
         autoRegenerate = true;
         tablePresetApplied = true;
         Generate();
+    }
+
+    [ContextMenu("Apply Dark Bottom White-Line Tabletop Preset")]
+    public void ApplyDarkBottomWhiteLineTabletopPreset()
+    {
+        ApplyReferenceMatchBackdropWhiteLineDarkPreset();
+        if (gameObject != null && gameObject.name == "DesktopQuad")
+        {
+            EnsureBackdropMaterialVisibleStrongly();
+        }
     }
 
     [ContextMenu("Force Rebuild Tabletop Backdrop Visibility")]
@@ -769,6 +796,418 @@ public class DeskContourTerrainGenerator : MonoBehaviour
         ApplyBackdropVisibilityHardening(renderer, renderer.sharedMaterial, true);
         renderer.enabled = true;
         renderer.gameObject.SetActive(true);
+        RebuildContourLineOverlay();
+    }
+
+    private void RebuildContourLineOverlay()
+    {
+        if (heightField == null || heightField.Length == 0 || contourStyle != ContourStyle.ReferenceMatchBackdrop)
+        {
+            ClearContourLineOverlay();
+            return;
+        }
+
+        MeshFilter parentMeshFilter = GetComponent<MeshFilter>();
+        MeshRenderer parentRenderer = GetComponent<MeshRenderer>();
+        if (parentMeshFilter == null || parentRenderer == null)
+        {
+            return;
+        }
+
+        Transform overlayParent = transform.parent != null ? transform.parent : transform;
+        if (contourLineOverlay == null)
+        {
+            Transform existing = overlayParent.Find(ContourLineOverlayName);
+            contourLineOverlay = existing != null ? existing.gameObject : new GameObject(ContourLineOverlayName);
+            contourLineOverlay.transform.SetParent(overlayParent, false);
+        }
+
+        contourLineOverlay.hideFlags = HideFlags.DontSave;
+        contourLineOverlay.SetActive(true);
+        if (transform.parent != null)
+        {
+            contourLineOverlay.transform.localPosition = transform.localPosition + Vector3.up * 0.035f;
+            contourLineOverlay.transform.localRotation = Quaternion.identity;
+            contourLineOverlay.transform.localScale = new Vector3(
+                Mathf.Abs(transform.localScale.x),
+                1f,
+                Mathf.Abs(transform.localScale.y));
+        }
+        else
+        {
+            contourLineOverlay.transform.position = transform.position + Vector3.up * 0.035f;
+            contourLineOverlay.transform.rotation = Quaternion.identity;
+            contourLineOverlay.transform.localScale = new Vector3(
+                Mathf.Abs(transform.localScale.x),
+                1f,
+                Mathf.Abs(transform.localScale.y));
+        }
+
+        MeshFilter meshFilter = contourLineOverlay.GetComponent<MeshFilter>();
+        if (meshFilter == null)
+        {
+            meshFilter = contourLineOverlay.AddComponent<MeshFilter>();
+        }
+
+        MeshRenderer meshRenderer = contourLineOverlay.GetComponent<MeshRenderer>();
+        if (meshRenderer == null)
+        {
+            meshRenderer = contourLineOverlay.AddComponent<MeshRenderer>();
+        }
+
+        Mesh overlayMesh = BuildContourLineMesh();
+        meshFilter.sharedMesh = overlayMesh;
+        meshRenderer.sharedMaterial = GetContourLineOverlayMaterial();
+        meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        meshRenderer.receiveShadows = false;
+        meshRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+        meshRenderer.allowOcclusionWhenDynamic = false;
+        meshRenderer.sortingOrder = 3000;
+        meshRenderer.enabled = true;
+
+        RebuildContourTextureOverlay(overlayParent);
+    }
+
+    private void RebuildContourTextureOverlay(Transform overlayParent)
+    {
+        if (contourTextureOverlay != null)
+        {
+            contourTextureOverlay.SetActive(false);
+        }
+
+        return;
+
+#pragma warning disable CS0162
+        if (generatedTexture == null || overlayParent == null)
+        {
+            return;
+        }
+
+        if (contourTextureOverlay == null)
+        {
+            Transform existing = overlayParent.Find(ContourTextureOverlayName);
+            contourTextureOverlay = existing != null ? existing.gameObject : new GameObject(ContourTextureOverlayName);
+            contourTextureOverlay.transform.SetParent(overlayParent, false);
+        }
+
+        contourTextureOverlay.hideFlags = HideFlags.DontSave;
+        contourTextureOverlay.SetActive(true);
+        contourTextureOverlay.transform.localPosition = transform.localPosition + Vector3.up * 0.060f;
+        contourTextureOverlay.transform.localRotation = Quaternion.identity;
+        contourTextureOverlay.transform.localScale = new Vector3(
+            Mathf.Abs(transform.localScale.x),
+            1f,
+            Mathf.Abs(transform.localScale.y));
+
+        MeshFilter meshFilter = contourTextureOverlay.GetComponent<MeshFilter>();
+        if (meshFilter == null)
+        {
+            meshFilter = contourTextureOverlay.AddComponent<MeshFilter>();
+        }
+
+        if (meshFilter.sharedMesh == null)
+        {
+            meshFilter.sharedMesh = BuildTextureOverlayMesh();
+        }
+
+        MeshRenderer meshRenderer = contourTextureOverlay.GetComponent<MeshRenderer>();
+        if (meshRenderer == null)
+        {
+            meshRenderer = contourTextureOverlay.AddComponent<MeshRenderer>();
+        }
+
+        Material material = GetContourTextureOverlayMaterial();
+        SetMaterialTexture(material, BuildVisibleContourTextureOverlay());
+        meshRenderer.sharedMaterial = material;
+        meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        meshRenderer.receiveShadows = false;
+        meshRenderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+        meshRenderer.allowOcclusionWhenDynamic = false;
+        meshRenderer.sortingOrder = 2500;
+        meshRenderer.enabled = true;
+#pragma warning restore CS0162
+    }
+
+    private static Mesh BuildTextureOverlayMesh()
+    {
+        Mesh mesh = new Mesh();
+        mesh.name = "DarkWhiteContourTextureOverlayMesh";
+        mesh.SetVertices(new[]
+        {
+            new Vector3(-0.5f, 0f, -0.5f),
+            new Vector3(0.5f, 0f, -0.5f),
+            new Vector3(-0.5f, 0f, 0.5f),
+            new Vector3(0.5f, 0f, 0.5f)
+        });
+        mesh.SetUVs(0, new[]
+        {
+            new Vector2(0f, 0f),
+            new Vector2(1f, 0f),
+            new Vector2(0f, 1f),
+            new Vector2(1f, 1f)
+        });
+        mesh.SetTriangles(new[] { 0, 2, 1, 2, 3, 1 }, 0);
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    private Texture2D BuildVisibleContourTextureOverlay()
+    {
+        const int overlayResolution = 1024;
+        if (contourTextureOverlayTexture == null
+            || contourTextureOverlayTexture.width != overlayResolution
+            || contourTextureOverlayTexture.height != overlayResolution)
+        {
+            if (contourTextureOverlayTexture != null)
+            {
+                CleanupTexture(contourTextureOverlayTexture);
+            }
+
+            contourTextureOverlayTexture = new Texture2D(overlayResolution, overlayResolution, TextureFormat.RGBA32, false, true);
+            contourTextureOverlayTexture.wrapMode = TextureWrapMode.Clamp;
+            contourTextureOverlayTexture.filterMode = FilterMode.Bilinear;
+        }
+
+        Color[] pixels = new Color[overlayResolution * overlayResolution];
+        int sourceResolution = Mathf.Clamp(textureResolution, MinResolution, MaxResolution);
+        for (int y = 0; y < overlayResolution; y++)
+        {
+            int sourceY = Mathf.Clamp(Mathf.RoundToInt(y / (float)(overlayResolution - 1) * (sourceResolution - 1)), 0, sourceResolution - 1);
+            for (int x = 0; x < overlayResolution; x++)
+            {
+                int sourceX = Mathf.Clamp(Mathf.RoundToInt(x / (float)(overlayResolution - 1) * (sourceResolution - 1)), 0, sourceResolution - 1);
+                float h = heightField[sourceY * sourceResolution + sourceX];
+                float band = Mathf.Abs(Mathf.Sin((h * contourLayers + contourBias) * Mathf.PI));
+                float line = 1f - Mathf.SmoothStep(0.015f, 0.070f, band);
+                pixels[y * overlayResolution + x] = Color.Lerp(
+                    new Color(0.001f, 0.0015f, 0.0022f, 1f),
+                    Color.white,
+                    Mathf.Pow(line, 0.9f));
+            }
+        }
+
+        contourTextureOverlayTexture.SetPixels(pixels);
+        contourTextureOverlayTexture.Apply(false, false);
+        return contourTextureOverlayTexture;
+    }
+
+    private Mesh BuildContourLineMesh()
+    {
+        int resolution = Mathf.Clamp(textureResolution, MinResolution, MaxResolution);
+        int step = Mathf.Max(6, resolution / 96);
+        int gridSize = Mathf.Max(8, resolution / step);
+        int layers = Mathf.Clamp(contourLayers, 10, 56);
+        var vertices = new System.Collections.Generic.List<Vector3>(gridSize * gridSize);
+        var indices = new System.Collections.Generic.List<int>(gridSize * layers);
+
+        for (int layer = 1; layer < layers; layer++)
+        {
+            float threshold = layer / (float)layers;
+            for (int gy = 0; gy < gridSize - 1; gy++)
+            {
+                int y0 = Mathf.Min(resolution - 1, gy * step);
+                int y1 = Mathf.Min(resolution - 1, (gy + 1) * step);
+                for (int gx = 0; gx < gridSize - 1; gx++)
+                {
+                    int x0 = Mathf.Min(resolution - 1, gx * step);
+                    int x1 = Mathf.Min(resolution - 1, (gx + 1) * step);
+
+                    float h00 = heightField[y0 * resolution + x0] - threshold;
+                    float h10 = heightField[y0 * resolution + x1] - threshold;
+                    float h11 = heightField[y1 * resolution + x1] - threshold;
+                    float h01 = heightField[y1 * resolution + x0] - threshold;
+
+                    AddMarchingSquareSegments(vertices, indices, h00, h10, h11, h01, x0, y0, x1, y1, resolution);
+                }
+            }
+        }
+
+        Mesh mesh = new Mesh();
+        mesh.name = $"{name}_WhiteContourLineOverlay";
+        mesh.indexFormat = vertices.Count > 65000
+            ? UnityEngine.Rendering.IndexFormat.UInt32
+            : UnityEngine.Rendering.IndexFormat.UInt16;
+        mesh.SetVertices(vertices);
+        mesh.SetIndices(indices, MeshTopology.Lines, 0, true);
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    private static void AddMarchingSquareSegments(
+        System.Collections.Generic.List<Vector3> vertices,
+        System.Collections.Generic.List<int> indices,
+        float h00,
+        float h10,
+        float h11,
+        float h01,
+        int x0,
+        int y0,
+        int x1,
+        int y1,
+        int resolution)
+    {
+        Vector3[] crossings = new Vector3[4];
+        int count = 0;
+        TryAddCrossing(crossings, ref count, h00, h10, x0, y0, x1, y0, resolution);
+        TryAddCrossing(crossings, ref count, h10, h11, x1, y0, x1, y1, resolution);
+        TryAddCrossing(crossings, ref count, h11, h01, x1, y1, x0, y1, resolution);
+        TryAddCrossing(crossings, ref count, h01, h00, x0, y1, x0, y0, resolution);
+
+        if (count < 2)
+        {
+            return;
+        }
+
+        AddLine(vertices, indices, crossings[0], crossings[1]);
+        if (count == 4)
+        {
+            AddLine(vertices, indices, crossings[2], crossings[3]);
+        }
+    }
+
+    private static void TryAddCrossing(
+        Vector3[] crossings,
+        ref int count,
+        float a,
+        float b,
+        int ax,
+        int ay,
+        int bx,
+        int by,
+        int resolution)
+    {
+        bool crosses = (a <= 0f && b > 0f) || (a > 0f && b <= 0f);
+        if (!crosses || count >= crossings.Length)
+        {
+            return;
+        }
+
+        float t = Mathf.Clamp01(Mathf.Abs(a) / (Mathf.Abs(a) + Mathf.Abs(b) + 0.0001f));
+        float x = Mathf.Lerp(ax, bx, t) / Mathf.Max(1f, resolution - 1f) - 0.5f;
+        float y = Mathf.Lerp(ay, by, t) / Mathf.Max(1f, resolution - 1f) - 0.5f;
+        crossings[count++] = new Vector3(x, 0f, y);
+    }
+
+    private static void AddLine(System.Collections.Generic.List<Vector3> vertices, System.Collections.Generic.List<int> indices, Vector3 a, Vector3 b)
+    {
+        int start = vertices.Count;
+        vertices.Add(a);
+        vertices.Add(b);
+        indices.Add(start);
+        indices.Add(start + 1);
+    }
+
+    private Material GetContourLineOverlayMaterial()
+    {
+        if (contourLineOverlayMaterial != null)
+        {
+            return contourLineOverlayMaterial;
+        }
+
+        Shader shader = Shader.Find("Unlit/Color");
+        if (shader == null)
+        {
+            shader = Shader.Find("Sprites/Default");
+        }
+
+        if (shader == null)
+        {
+            shader = Shader.Find("Standard");
+        }
+
+        contourLineOverlayMaterial = new Material(shader);
+        contourLineOverlayMaterial.name = $"{name}_WhiteContourLineOverlay_Material";
+        if (contourLineOverlayMaterial.HasProperty(ColorProperty))
+        {
+            contourLineOverlayMaterial.SetColor(ColorProperty, Color.white);
+        }
+
+        if (contourLineOverlayMaterial.HasProperty(BaseColorProperty))
+        {
+            contourLineOverlayMaterial.SetColor(BaseColorProperty, Color.white);
+        }
+
+        if (contourLineOverlayMaterial.HasProperty("_ZWrite"))
+        {
+            contourLineOverlayMaterial.SetInt("_ZWrite", 0);
+        }
+
+        if (contourLineOverlayMaterial.HasProperty("_ZTest"))
+        {
+            contourLineOverlayMaterial.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+        }
+
+        if (contourLineOverlayMaterial.HasProperty("_Cull"))
+        {
+            contourLineOverlayMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        contourLineOverlayMaterial.renderQueue = 3000;
+        return contourLineOverlayMaterial;
+    }
+
+    private Material GetContourTextureOverlayMaterial()
+    {
+        if (contourTextureOverlayMaterial != null)
+        {
+            return contourTextureOverlayMaterial;
+        }
+
+        Shader shader = Shader.Find("Unlit/Texture");
+        if (shader == null)
+        {
+            shader = Shader.Find("Sprites/Default");
+        }
+
+        if (shader == null)
+        {
+            shader = Shader.Find("Standard");
+        }
+
+        contourTextureOverlayMaterial = new Material(shader);
+        contourTextureOverlayMaterial.name = $"{name}_WhiteContourTextureOverlay_Material";
+        if (contourTextureOverlayMaterial.HasProperty(ColorProperty))
+        {
+            contourTextureOverlayMaterial.SetColor(ColorProperty, Color.white);
+        }
+
+        if (contourTextureOverlayMaterial.HasProperty(BaseColorProperty))
+        {
+            contourTextureOverlayMaterial.SetColor(BaseColorProperty, Color.white);
+        }
+
+        if (contourTextureOverlayMaterial.HasProperty("_Cull"))
+        {
+            contourTextureOverlayMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+        }
+
+        if (contourTextureOverlayMaterial.HasProperty("_ZWrite"))
+        {
+            contourTextureOverlayMaterial.SetInt("_ZWrite", 0);
+        }
+
+        if (contourTextureOverlayMaterial.HasProperty("_ZTest"))
+        {
+            contourTextureOverlayMaterial.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+        }
+
+        contourTextureOverlayMaterial.renderQueue = 2990;
+        return contourTextureOverlayMaterial;
+    }
+
+    private void ClearContourLineOverlay()
+    {
+        if (contourLineOverlay != null)
+        {
+            DestroyRuntimeAsset(contourLineOverlay);
+            contourLineOverlay = null;
+        }
+
+        if (contourTextureOverlay != null)
+        {
+            DestroyRuntimeAsset(contourTextureOverlay);
+            contourTextureOverlay = null;
+        }
     }
 
     [ContextMenu("Reset to Reference Match Backdrop Preset")]
@@ -1311,7 +1750,9 @@ public class DeskContourTerrainGenerator : MonoBehaviour
                 float lineCoreWidth = Mathf.Max(0.008f, lineWidth);
                 float contour = 1f - Mathf.InverseLerp(lineCoreWidth, lineCoreWidth + lineSoftness * 0.6f, nearestNormalized);
                 contour = Mathf.Clamp01(contour);
-                contour *= glowFlow;
+                contour *= contourStyle == ContourStyle.ReferenceMatchBackdrop
+                    ? Mathf.Lerp(0.72f, 1f, glowFlow)
+                    : glowFlow;
                 if (contour > 0f)
                 {
                     Color contourFinal = Color.Lerp(
@@ -1335,30 +1776,36 @@ public class DeskContourTerrainGenerator : MonoBehaviour
                 pixel.a *= Mathf.Lerp(0.78f, 1f, rim);
                 if (contourStyle == ContourStyle.ReferenceMatchBackdrop)
                 {
-                    float contourSignal = Mathf.Pow(Mathf.Clamp01(contour), 1.22f);
-                    float baseLuma = Mathf.Lerp(0.004f, 0.028f, Mathf.Clamp01(h));
+                    float contourSignal = Mathf.Pow(Mathf.Clamp01(contour), 0.72f);
+                    float baseLuma = Mathf.Lerp(0.002f, 0.018f, Mathf.Clamp01(h));
                     float detail = Mathf.SmoothStep(0f, 1f, haze);
                     float rimBlend = Mathf.Clamp01(1f - radial * 1.2f);
 
-                    float back = Mathf.Lerp(baseLuma, 0.012f + baseLuma * 0.8f, rimBlend);
+                    float back = Mathf.Lerp(baseLuma, 0.008f + baseLuma * 0.65f, rimBlend);
                     Color backdropBase = new Color(back, back, back + 0.0012f, 1f);
 
                     Color lineCore = Color.Lerp(
                         new Color(1f, 1f, 1f, 1f),
                         new Color(contourColor.r, contourColor.g, contourColor.b, 1f),
-                        0.22f);
-                    float lineMask = Mathf.SmoothStep(0f, 1f, contourSignal);
+                        0.08f);
+                    float lineMask = Mathf.SmoothStep(0.91f, 0.985f, nearestNormalized);
                     pixel = Color.Lerp(backdropBase, lineCore, lineMask);
-                    pixel = Color.Lerp(pixel, Color.white, Mathf.Pow(lineMask, 12f) * 0.35f);
+                    pixel = Color.Lerp(pixel, Color.white, Mathf.Pow(lineMask, 5f) * 0.55f);
 
-                    float lineGlow = Mathf.Pow(glowFlow, 1.5f) * (0.20f + rim * 0.25f) * Mathf.Lerp(0.55f, 1f, lineMask);
+                    float lineGlow = Mathf.Pow(Mathf.Max(glowFlow, lineMask), 1.2f) * (0.16f + rim * 0.22f) * Mathf.Lerp(0.50f, 1f, lineMask);
                     pixel += lineGlow * new Color(glowColor.r, glowColor.g, glowColor.b, 0f);
-                    pixel = Color.Lerp(pixel, Color.black, detail * 0.06f + (1f - rimBlend) * 0.12f);
+                    pixel = Color.Lerp(pixel, Color.black, detail * 0.035f + (1f - rimBlend) * 0.08f);
                     pixel = new Color(
                         Mathf.Clamp01(pixel.r),
                         Mathf.Clamp01(pixel.g),
                         Mathf.Clamp01(pixel.b),
                         1f);
+                    float contourBand = Mathf.Abs(Mathf.Sin((h * contourLayers + contourBias + flowMask * 0.08f) * Mathf.PI));
+                    float finalLine = 1f - Mathf.SmoothStep(0.035f, 0.115f, contourBand);
+                    pixel = Color.Lerp(
+                        new Color(0.001f, 0.0015f, 0.0022f, 1f),
+                        Color.white,
+                        Mathf.Pow(finalLine, 1.1f));
                     backdropLineCoverage += contourSignal;
                     backdropLineIntensity += lineMask;
                     if (lineMask > 0.12f)

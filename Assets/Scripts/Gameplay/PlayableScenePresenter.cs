@@ -471,7 +471,8 @@ private static bool CanMutateSceneHierarchy
 
         backing.transform.position = pile.transform.position;
         Vector2 scale = PlayableSceneRules.PileBadgeScale;
-for (int i = 0; i < PlayableSceneRules.PileStackLayerCount; i++)
+        float layerThickness = PlayableSceneRules.PileStackLayerThickness;
+        for (int i = 0; i < PlayableSceneRules.PileStackLayerCount; i++)
         {
             Transform layer = backing.transform.Find($"Layer {i}");
             if (layer == null)
@@ -489,18 +490,66 @@ for (int i = 0; i < PlayableSceneRules.PileStackLayerCount; i++)
             }
 
             float offset = i * PlayableSceneRules.PileStackLayerOffset;
-            layer.localPosition = new Vector3(-offset, -0.108f - i * 0.002f, offset);
-            layer.localScale = new Vector3(scale.x, 0.026f, scale.y);
+            layer.localPosition = new Vector3(-offset, -0.108f + i * layerThickness, offset);
+            layer.localScale = new Vector3(scale.x, layerThickness, scale.y);
 
             MeshRenderer renderer = layer.GetComponent<MeshRenderer>();
             if (renderer != null)
             {
-                Color color = Color.Lerp(new Color(0.035f, 0.04f, 0.035f), new Color(0.075f, 0.08f, 0.07f), i / 3f);
+                Color color = Color.Lerp(new Color(0.045f, 0.046f, 0.038f), new Color(0.16f, 0.15f, 0.11f), i / Mathf.Max(1f, PlayableSceneRules.PileStackLayerCount - 1f));
                 renderer.sharedMaterial = NewSurfaceMaterial(color);
             }
         }
 
+        ConfigurePileSide(backing.transform, "Left Side", scale, true);
+        ConfigurePileSide(backing.transform, "Right Side", scale, true);
+        ConfigurePileSide(backing.transform, "Front Side", scale, false);
+        ConfigurePileSide(backing.transform, "Back Side", scale, false);
         ConfigurePileTopPattern(backing.transform, pile.Kind, scale);
+    }
+
+    private void ConfigurePileSide(Transform backing, string name, Vector2 scale, bool alongDepth)
+    {
+        Transform side = backing.Find(name);
+        if (side == null)
+        {
+            GameObject sideObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            sideObject.name = name;
+            sideObject.transform.SetParent(backing, false);
+            Collider collider = sideObject.GetComponent<Collider>();
+            if (collider != null)
+            {
+                DestroyGeneratedObject(collider);
+            }
+
+            side = sideObject.transform;
+        }
+
+        float topOffset = (PlayableSceneRules.PileStackLayerCount - 1) * PlayableSceneRules.PileStackLayerOffset;
+        float height = PlayableSceneRules.PileStackLayerCount * PlayableSceneRules.PileStackLayerThickness;
+        float y = -0.108f + height * 0.5f - PlayableSceneRules.PileStackLayerThickness * 0.5f;
+        float x = -topOffset * 0.5f;
+        float z = topOffset * 0.5f;
+        bool positiveEdge = name.Contains("Right") || name.Contains("Back");
+        if (alongDepth)
+        {
+            side.localPosition = new Vector3(x + (positiveEdge ? scale.x : -scale.x) * 0.5f, y, z);
+            side.localScale = new Vector3(0.018f, height, scale.y + topOffset);
+        }
+        else
+        {
+            side.localPosition = new Vector3(x, y, z + (positiveEdge ? scale.y : -scale.y) * 0.5f);
+            side.localScale = new Vector3(scale.x + topOffset, height, 0.018f);
+        }
+
+        MeshRenderer renderer = side.GetComponent<MeshRenderer>();
+        if (renderer != null)
+        {
+            Color sideColor = alongDepth
+                ? new Color(0.072f, 0.066f, 0.048f, 1f)
+                : new Color(0.052f, 0.050f, 0.040f, 1f);
+            renderer.sharedMaterial = NewSurfaceMaterial(sideColor);
+        }
     }
 
     private void ConfigurePileTopPattern(Transform backing, ScenePileKind kind, Vector2 scale)
@@ -511,11 +560,37 @@ for (int i = 0; i < PlayableSceneRules.PileStackLayerCount; i++)
         }
 
         float topOffset = (PlayableSceneRules.PileStackLayerCount - 1) * PlayableSceneRules.PileStackLayerOffset;
-        float topY = -0.108f - (PlayableSceneRules.PileStackLayerCount - 1) * 0.002f + 0.018f;
+        float topY = -0.108f + (PlayableSceneRules.PileStackLayerCount - 1) * PlayableSceneRules.PileStackLayerThickness + 0.016f;
         string prefix = kind == ScenePileKind.Deck ? "Deck Back" : "Discard Top";
+        Color topColor = kind == ScenePileKind.Deck
+            ? new Color(0.13f, 0.16f, 0.18f, 1f)
+            : new Color(0.18f, 0.16f, 0.12f, 1f);
         Color stripeColor = kind == ScenePileKind.Deck
-            ? new Color(0.68f, 0.62f, 0.48f, 1f)
-            : new Color(0.38f, 0.40f, 0.36f, 1f);
+            ? new Color(0.82f, 0.74f, 0.50f, 1f)
+            : new Color(0.58f, 0.58f, 0.48f, 1f);
+
+        Transform topFace = backing.Find($"{prefix} Face");
+        if (topFace == null)
+        {
+            GameObject topFaceObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            topFaceObject.name = $"{prefix} Face";
+            topFaceObject.transform.SetParent(backing, false);
+            Collider collider = topFaceObject.GetComponent<Collider>();
+            if (collider != null)
+            {
+                DestroyGeneratedObject(collider);
+            }
+
+            topFace = topFaceObject.transform;
+        }
+
+        topFace.localPosition = new Vector3(-topOffset, topY + 0.001f, topOffset);
+        topFace.localScale = new Vector3(scale.x * 0.94f, 0.007f, scale.y * 0.88f);
+        MeshRenderer topRenderer = topFace.GetComponent<MeshRenderer>();
+        if (topRenderer != null)
+        {
+            topRenderer.sharedMaterial = NewSurfaceMaterial(topColor);
+        }
 
         for (int i = 0; i < 3; i++)
         {

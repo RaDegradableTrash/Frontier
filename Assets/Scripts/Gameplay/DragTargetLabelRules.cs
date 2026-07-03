@@ -7,11 +7,7 @@ public static class DragTargetLabelRules
             return "ATTACK";
         }
 
-        if (card != null
-            && card.Zone == CardZone.PlayerSupport
-            && targetSlot != null
-            && targetSlot.Zone == SlotZone.Frontline
-            && targetSlot.IsOccupied)
+        if (card != null && targetSlot != null && targetSlot.IsOccupied)
         {
             return "TARGET";
         }
@@ -26,9 +22,9 @@ public static class DragTargetLabelRules
             return "TARGET";
         }
 
-        if (card.Zone == CardZone.PlayerSupport)
+        if (card.Zone == CardZone.PlayerSupport || card.Zone == CardZone.EnemySupport)
         {
-            return targetZone == SlotZone.Frontline ? "ADVANCE" : "MOVE";
+            return "MOVE";
         }
 
         if (card.Zone == CardZone.Frontline)

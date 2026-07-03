@@ -11,7 +11,7 @@ public static class SlotHighlightLabelRules
         {
             if (card.Type == CardType.Unit)
             {
-                return targetZone == SlotZone.Frontline ? "MOBILIZE" : "DEPLOY HERE";
+                return "DEPLOY HERE";
             }
 
             if (card.Type == CardType.Countermeasure)
@@ -22,9 +22,9 @@ public static class SlotHighlightLabelRules
             return OrderLabelFor(card);
         }
 
-        if (card.Zone == CardZone.PlayerSupport)
+        if (card.Zone == CardZone.PlayerSupport || card.Zone == CardZone.EnemySupport)
         {
-            return "ADVANCE HERE";
+            return "MOVE HERE";
         }
 
         if (card.Zone == CardZone.Frontline)

@@ -13,7 +13,14 @@ public class SlotVisualize_Temp : MonoBehaviour
     {
         EnsureFill(localPoints, color);
         lineRenderer = gameObject.AddComponent<LineRenderer>();
-        lineRenderer.material = material;
+        if (Application.isPlaying)
+        {
+            lineRenderer.material = material;
+        }
+        else
+        {
+            lineRenderer.sharedMaterial = material;
+        }
         lineRenderer.positionCount = localPoints.Length;
         lineRenderer.loop = true;
         lineRenderer.startWidth = lineRenderer.endWidth = 0.035f;
@@ -72,7 +79,14 @@ public class SlotVisualize_Temp : MonoBehaviour
         fillRenderer = fill.GetComponent<MeshRenderer>();
         fillMaterial = new Material(Shader.Find("Unlit/Color"));
         fillMaterial.color = FillColor(color);
-        fillRenderer.material = fillMaterial;
+        if (Application.isPlaying)
+        {
+            fillRenderer.material = fillMaterial;
+        }
+        else
+        {
+            fillRenderer.sharedMaterial = fillMaterial;
+        }
     }
 
     private void SetHighlightLabelVisible(bool visible, string label)

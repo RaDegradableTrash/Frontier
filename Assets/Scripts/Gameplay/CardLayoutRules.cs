@@ -17,7 +17,7 @@ public static class CardLayoutRules
 
     public static float HandLayerHeightOffset(int index)
     {
-        return index * 0.006f;
+        return index * 0.030f;
     }
 
     public static int NewlyAddedIndex(int countAfterAdd)
