@@ -5,6 +5,12 @@ public partial class GameController
 {
         private const float PointerDragStartThresholdPixels = 18f;
         private const float PointerDragStartHoldSeconds = 0.02f;
+        private const float HandRevealHoldScreenMarginRatio = 0.035f;
+        private const float HandRevealHorizontalScreenMarginRatio = 0.12f;
+        private const float HandRevealBottomScreenRatio = 0.075f;
+        private const float HandRevealBottomMinXRatio = 0.05f;
+        private const float HandRevealBottomMaxXRatio = 0.95f;
+        private const float HandRevealGraceSeconds = 0.32f;
         private CardView unifiedHandPointerView;
         private Vector3 unifiedHandPointerDownScreenPosition;
         private float unifiedHandPointerDownTime;
@@ -23,6 +29,14 @@ public partial class GameController
             if (pointerView == null)
             {
                 pointerView = FindProjectedPointerCard(mainCamera, Input.mousePosition);
+            }
+
+            if (phase == GamePhase.PlayerTurn
+                && activeSide == PlayerSide.Player
+                && IsPlayerHandView(pointerView)
+                && !IsPointerInPlayerHandHoldZone())
+            {
+                pointerView = null;
             }
 
             SetHoveredCardView(pointerView);
@@ -72,13 +86,14 @@ public partial class GameController
                 return;
             }
 
-            bool pointerOverPlayerHand = IsPointerRaycastOverPlayerHand();
-            if (pointerOverPlayerHand)
+            bool pointerWantsReveal = IsPointerInPlayerHandRevealZone();
+            bool pointerKeepsReveal = playerHandRevealed && IsPointerInPlayerHandHoldZone();
+            if (pointerWantsReveal || pointerKeepsReveal)
             {
-                playerHandRevealGraceUntil = Time.time + 0.14f;
+                playerHandRevealGraceUntil = Time.time + HandRevealGraceSeconds;
             }
 
-            bool shouldReveal = pointerOverPlayerHand || Time.time < playerHandRevealGraceUntil;
+            bool shouldReveal = pointerWantsReveal || pointerKeepsReveal || Time.time < playerHandRevealGraceUntil;
             if (shouldReveal == playerHandRevealed)
             {
                 return;
@@ -91,10 +106,14 @@ public partial class GameController
         {
             if (revealRequested)
             {
-                playerHandRevealGraceUntil = Time.time + 0.14f;
+                playerHandRevealGraceUntil = Time.time + HandRevealGraceSeconds;
                 playerHandRevealRequested = true;
                 UpdateHandReveal();
+                return;
             }
+
+            playerHandRevealRequested = true;
+            UpdateHandReveal();
         }
 
         public void RegisterDirectPointerInteraction(CardView view)
@@ -111,6 +130,11 @@ public partial class GameController
 
             Vector3 pointer = Input.mousePosition;
             if (pointer.x < 0f || pointer.y < 0f || pointer.x > Screen.width || pointer.y > Screen.height)
+            {
+                return false;
+            }
+
+            if (!IsPointerInPlayerHandHoldZone())
             {
                 return false;
             }
@@ -136,6 +160,116 @@ public partial class GameController
             }
 
             return false;
+        }
+
+        private bool IsPointerInPlayerHandRevealZone()
+        {
+            Vector3 pointer = Input.mousePosition;
+            if (Screen.width <= 0
+                || Screen.height <= 0
+                || pointer.x < 0f
+                || pointer.y < 0f
+                || pointer.x > Screen.width
+                || pointer.y > Screen.height)
+            {
+                return false;
+            }
+
+            return IsPointerInPlayerHandBottomHotZone(pointer);
+        }
+
+        private bool IsPointerInPlayerHandHoldZone()
+        {
+            Vector3 pointer = Input.mousePosition;
+            return IsPointerInPlayerHandBottomHotZone(pointer)
+                || IsPointerNearPlayerHandScreenBand(pointer, HandRevealHoldScreenMarginRatio);
+        }
+
+        private bool IsPointerInPlayerHandBottomHotZone(Vector3 pointer)
+        {
+            if (!IsPointerInBottomScreenStrip(pointer))
+            {
+                return false;
+            }
+
+            Camera mainCamera = Camera.main;
+            if (mainCamera == null || player == null || player.Hand == null || player.Hand.Count == 0)
+            {
+                return true;
+            }
+
+            return IsPointerInPlayerHandHorizontalRange(mainCamera, pointer)
+                || IsPointerInPlayerHandBottomFixedRange(pointer);
+        }
+
+        private bool IsPointerInPlayerHandBottomFixedRange(Vector3 pointer)
+        {
+            float minX = Screen.width * HandRevealBottomMinXRatio;
+            float maxX = Screen.width * HandRevealBottomMaxXRatio;
+            return pointer.x >= minX && pointer.x <= maxX;
+        }
+
+        private bool IsPointerInBottomScreenStrip(Vector3 pointer)
+        {
+            return pointer.y <= Screen.height * HandRevealBottomScreenRatio;
+        }
+
+        private bool IsPointerNearPlayerHandScreenBand(Vector3 pointer, float marginRatio)
+        {
+            if (Screen.width <= 0
+                || Screen.height <= 0
+                || pointer.x < 0f
+                || pointer.y < 0f
+                || pointer.x > Screen.width
+                || pointer.y > Screen.height)
+            {
+                return false;
+            }
+
+            Camera mainCamera = Camera.main;
+            if (mainCamera == null || player == null || player.Hand == null || player.Hand.Count == 0)
+            {
+                return pointer.y <= Screen.height * marginRatio;
+            }
+
+            int centerIndex = Mathf.Clamp((player.Hand.Count - 1) / 2, 0, player.Hand.Count - 1);
+            Vector3 center = HandPosition(PlayerSide.Player, centerIndex, player.Hand.Count);
+            float halfDepth = PlayableSceneRules.HandCardHeight * PlayableSceneRules.HandCardScale * 0.5f;
+            float yA = mainCamera.WorldToScreenPoint(center - Vector3.forward * halfDepth).y;
+            float yB = mainCamera.WorldToScreenPoint(center + Vector3.forward * halfDepth).y;
+            float minY = Mathf.Min(yA, yB);
+            float maxY = Mathf.Max(yA, yB);
+            float marginY = Mathf.Max(24f, Screen.height * marginRatio);
+            return IsPointerInPlayerHandHorizontalRange(mainCamera, pointer)
+                && pointer.y >= minY - marginY
+                && pointer.y <= maxY + marginY;
+        }
+
+        private bool IsPointerInPlayerHandHorizontalRange(Camera mainCamera, Vector3 pointer)
+        {
+            if (mainCamera == null || player == null || player.Hand == null || player.Hand.Count == 0)
+            {
+                return false;
+            }
+
+            float halfWidth = PlayableSceneRules.HandCardWidth * PlayableSceneRules.HandCardScale * 0.5f;
+            Vector3 first = HandPosition(PlayerSide.Player, 0, player.Hand.Count);
+            Vector3 last = HandPosition(PlayerSide.Player, player.Hand.Count - 1, player.Hand.Count);
+            float xA = mainCamera.WorldToScreenPoint(first - Vector3.right * halfWidth).x;
+            float xB = mainCamera.WorldToScreenPoint(last + Vector3.right * halfWidth).x;
+            float minX = Mathf.Min(xA, xB);
+            float maxX = Mathf.Max(xA, xB);
+            float marginX = Mathf.Max(36f, Screen.width * HandRevealHorizontalScreenMarginRatio);
+            return pointer.x >= minX - marginX
+                && pointer.x <= maxX + marginX;
+        }
+
+        private static bool IsPlayerHandView(CardView view)
+        {
+            return view != null
+                && view.Card != null
+                && view.Card.Owner == PlayerSide.Player
+                && view.Card.Zone == CardZone.Hand;
         }
 
         private void RevealPlayerHandBriefly(float seconds = 4f)
@@ -400,6 +534,8 @@ public partial class GameController
             centerInspectCard = null;
             inspectedCard = null;
             hoveredHandCardId = null;
+            playerHandRevealGraceUntil = Mathf.Min(playerHandRevealGraceUntil, Time.time);
+            UpdateHandReveal();
             SetStatus("Closed card detail view.");
             RefreshSceneInspector();
             RefreshAllViews();            
@@ -441,20 +577,18 @@ public partial class GameController
                 return;
             }
 
+            if (view.Card.Zone == CardZone.Hand && view.Card.Owner == PlayerSide.Player)
+            {
+                inspectedCard = view.Card;
+                RefreshSceneInspector();
+                return;
+            }
+
             inspectedCard = view.Card;
             if (IsAirborneUnitSelectionActive())
             {
                 RefreshSceneInspector();
                 return;
-            }
-
-            if (view.Card.Zone == CardZone.Hand && view.Card.Owner == PlayerSide.Player)
-            {
-                if (view != centerInspectView && hoveredHandCardId != view.Card.Id)
-                {
-                    hoveredHandCardId = view.Card.Id;
-                    RefreshHandLayouts();
-                }
             }
 
             RefreshSceneInspector();
@@ -945,9 +1079,9 @@ public partial class GameController
 
             Rect handBand = new Rect(
                 coordinateWidth * 0.16f,
-                coordinateHeight * 0.50f,
+                coordinateHeight * 0.58f,
                 coordinateWidth * 0.68f,
-                coordinateHeight * 0.42f);
+                coordinateHeight * 0.52f);
             Vector2 pointer = Event.current != null
                 ? Event.current.mousePosition
                 : new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
@@ -994,6 +1128,8 @@ public partial class GameController
                 unifiedHandPointerDownScreenPosition = Input.mousePosition;
                 unifiedHandPointerDownTime = Time.time;
                 unifiedHandPointerDragging = false;
+                playerHandRevealGraceUntil = Time.time + HandRevealGraceSeconds;
+                SetPlayerHandRevealed(true);
                 view.BeginPointerInteraction(Input.mousePosition, Time.time);
                 lastSceneCommandPointerFrame = Time.frameCount;
                 return;
@@ -1045,18 +1181,6 @@ public partial class GameController
 
         private CardView FindPointerPlayerHandCard()
         {
-            Vector2 guiPointer = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
-            if ((TryFindPlayerHandCardByScreenIndex(guiPointer, Screen.width, Screen.height, out CardView indexedView)
-                    || TryFindPlayerHandCardByScreenIndex(guiPointer, 1280f, 720f, out indexedView)
-                    || TryFindPlayerHandCardByScreenIndex(guiPointer, 1920f, 1080f, out indexedView))
-                && indexedView != null
-                && indexedView.Card != null
-                && indexedView.Card.Owner == PlayerSide.Player
-                && indexedView.Card.Zone == CardZone.Hand)
-            {
-                return indexedView;
-            }
-
             Camera mainCamera = Camera.main;
             CardView raycastView = CardView.RaycastPointerCard(mainCamera, Input.mousePosition);
             if (raycastView == null)
@@ -1529,6 +1653,11 @@ public partial class GameController
                     HandlePointerClickRelease(releaseClickCard);
                     lastSceneCommandPointerFrame = Time.frameCount;
                 }
+                else if (centerInspectCard != null && !IsPointerOverSceneCommandButton())
+                {
+                    CloseCardInspectView();
+                    lastSceneCommandPointerFrame = Time.frameCount;
+                }
 
                 pointerPressedCard = null;
 
@@ -1618,25 +1747,7 @@ public partial class GameController
                 return null;
             }
 
-            CardView handView = FindPlayerHandCardByScreenIndex(new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y));
-            if (handView != null)
-            {
-                return handView;
-            }
-
-            handView = FindPlayerHandCardUnderPointer(mainCamera, Input.mousePosition);
-            if (handView != null)
-            {
-                return handView;
-            }
-
-            handView = FindPlayerHandCardInScreenBand(mainCamera, Input.mousePosition);
-            if (handView != null)
-            {
-                return handView;
-            }
-
-            handView = FindNearestPlayerHandCard(mainCamera, Input.mousePosition);
+            CardView handView = FindPlayerHandCardUnderPointer(mainCamera, Input.mousePosition);
             if (handView != null)
             {
                 return handView;
@@ -1881,13 +1992,14 @@ public partial class GameController
         private bool TryFindPlayerHandCardByScreenIndex(Vector2 guiPosition, float coordinateWidth, float coordinateHeight, out CardView view)
         {
             view = null;
-            if (coordinateWidth <= 1f || coordinateHeight <= 1f)
+            if (coordinateWidth <= 1f || coordinateHeight <= 1f || player == null || player.Hand == null || player.Hand.Count == 0)
             {
                 return false;
             }
 
-            float normalizedY = guiPosition.y / coordinateHeight;
-            if (normalizedY < 0.55f || normalizedY > 0.92f)
+            float minY = coordinateHeight * 0.64f;
+            float maxY = coordinateHeight + Mathf.Max(36f, coordinateHeight * 0.10f);
+            if (guiPosition.y < minY || guiPosition.y > maxY)
             {
                 return false;
             }
@@ -1916,6 +2028,37 @@ public partial class GameController
         private bool IsCenterInspectCard(RuntimeCard card)
         {
             return card != null && centerInspectCard != null && card.Id == centerInspectCard.Id;
+        }
+
+        private bool IsPointerOverSceneCommandButton()
+        {
+            Camera mainCamera = Camera.main;
+            if (mainCamera == null)
+            {
+                return false;
+            }
+
+            EnsureSceneCommandButtonsCached();
+            foreach (SceneCommandButton button in sceneCommandButtons)
+            {
+                if (button == null)
+                {
+                    continue;
+                }
+
+                bool available = IsSceneCommandAvailable(button.Command);
+                if (!IsSceneCommandVisible(button.Command, available))
+                {
+                    continue;
+                }
+
+                if (TryPointerSceneCommandDistance(button, mainCamera, out float unusedDistance))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void HandleSceneCommandPointerInput()

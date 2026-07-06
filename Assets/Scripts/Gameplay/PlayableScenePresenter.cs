@@ -212,10 +212,13 @@ private static bool CanMutateSceneHierarchy
         handRail.transform.position = new Vector3(0f, 0.045f, -4.42f);
         handRail.transform.localScale = new Vector3(6.25f, 0.035f, 0.34f);
 
-        if (handRail.GetComponent<Collider>() == null)
+        BoxCollider handRailCollider = handRail.GetComponent<BoxCollider>();
+        if (handRailCollider == null)
         {
-            handRail.AddComponent<BoxCollider>();
+            handRailCollider = handRail.AddComponent<BoxCollider>();
         }
+        handRailCollider.center = Vector3.zero;
+        handRailCollider.size = new Vector3(1.35f, 1f, 5.0f);
 
         if (handRail.GetComponent<HandRevealZone>() == null)
         {

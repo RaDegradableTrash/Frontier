@@ -1,4 +1,7 @@
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 [ExecuteAlways]
 public class EditorScenePreview : MonoBehaviour
@@ -9,10 +12,27 @@ public class EditorScenePreview : MonoBehaviour
 
     private Transform previewRoot;
     private bool refreshing;
+#if UNITY_EDITOR
+    private bool refreshQueued;
+#endif
 
     private void OnEnable()
     {
-        Refresh();
+        if (Application.isPlaying)
+        {
+            ClearPreview();
+            return;
+        }
+
+        QueueEditorRefresh();
+    }
+
+    private void Update()
+    {
+        if (Application.isPlaying)
+        {
+            ClearPreview();
+        }
     }
 
     private void OnValidate()
@@ -22,15 +42,44 @@ public class EditorScenePreview : MonoBehaviour
             return;
         }
 
-        Refresh();
+        QueueEditorRefresh();
     }
 
     private void OnTransformChildrenChanged()
     {
         if (!Application.isPlaying && showPreview && !refreshing && previewRoot != null)
         {
-            Refresh();
+            QueueEditorRefresh();
         }
+    }
+
+    private void QueueEditorRefresh()
+    {
+        if (Application.isPlaying)
+        {
+            return;
+        }
+
+#if UNITY_EDITOR
+        if (refreshQueued)
+        {
+            return;
+        }
+
+        refreshQueued = true;
+        EditorApplication.delayCall += () =>
+        {
+            refreshQueued = false;
+            if (this == null || Application.isPlaying)
+            {
+                return;
+            }
+
+            Refresh();
+        };
+#else
+        Refresh();
+#endif
     }
 
     public void Refresh()

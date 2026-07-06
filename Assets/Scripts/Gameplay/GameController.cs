@@ -121,6 +121,11 @@ public partial class GameController : MonoBehaviour
 
     private void Update()
     {
+        if (phase == GamePhase.DeckBuilder)
+        {
+            ClearDeckBuilderInspectState();
+        }
+
         Vector3 currentPointer = Input.mousePosition;
         bool pointerMoved = !hasLastPointerPosition
             || (int)currentPointer.x != (int)lastPointerScreenPosition.x
@@ -148,7 +153,7 @@ public partial class GameController : MonoBehaviour
 
         if (handRevealNeedsRefresh
             || handRevealRefreshNeeded
-            || (playerHandRevealed && Time.time <= playerHandRevealGraceUntil))
+            || playerHandRevealed)
         {
             UpdateHandReveal();
             handRevealRefreshNeeded = false;
@@ -236,12 +241,54 @@ private void DrawSceneCommandHitAreas()
             }
 
             Rect hitArea = SceneCommandGuiRect(button, mainCamera);
+            Rect fallbackHitArea = SceneCommandFallbackGuiRect(button.Command);
             if (GUI.Button(hitArea, GUIContent.none, GUIStyle.none))
             {
                 ExecuteSceneCommand(button.Command);
                 return;
             }
+
+            if (fallbackHitArea.width > 1f
+                && GUI.Button(fallbackHitArea, GUIContent.none, GUIStyle.none))
+            {
+                ExecuteSceneCommand(button.Command);
+                return;
+            }
         }
+    }
+
+    private Rect SceneCommandFallbackGuiRect(SceneCommandType command)
+    {
+        float centerYRatio;
+        switch (command)
+        {
+            case SceneCommandType.StartMatch:
+                centerYRatio = 0.285f;
+                break;
+            case SceneCommandType.KeepHand:
+                centerYRatio = 0.335f;
+                break;
+            case SceneCommandType.Mulligan:
+                centerYRatio = 0.382f;
+                break;
+            case SceneCommandType.EndTurn:
+                centerYRatio = 0.395f;
+                break;
+            case SceneCommandType.Restart:
+                centerYRatio = phase == GamePhase.Mulligan ? 0.452f : 0.450f;
+                break;
+            case SceneCommandType.StrikeBoard:
+                centerYRatio = 0.510f;
+                break;
+            default:
+                return Rect.zero;
+        }
+
+        float width = Mathf.Clamp(Screen.width * 0.18f, 220f, 720f);
+        float height = Mathf.Clamp(Screen.height * 0.070f, 56f, 180f);
+        float x = Screen.width * 0.79f;
+        float y = Screen.height * centerYRatio - height * 0.5f;
+        return new Rect(x, y, width, height);
     }
 
     private void EnsureSceneCommandButtonsCached()
@@ -310,6 +357,8 @@ private void KeepOpeningHand()
         ClearDraggedHandCardIfNeeded(true);
         SetActiveSide(PlayerSide.Player);
         SetGamePhase(GamePhase.PlayerTurn);
+        playerHandRevealGraceUntil = Mathf.Min(playerHandRevealGraceUntil, Time.time);
+        SetPlayerHandRevealed(false);
         player.StartTurn();
         UpdateFrontlineControl();
         RefreshAllViews();

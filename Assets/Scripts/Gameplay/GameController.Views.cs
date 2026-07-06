@@ -176,15 +176,35 @@ public partial class GameController
                 phase,
                 activeSide,
                 mulliganUsed);
-            Rect boxRect = new Rect(Screen.width * 0.5f - 180f, 12f, 360f, 28f);
+            string detail = string.IsNullOrWhiteSpace(status) || string.Equals(status, prompt, System.StringComparison.OrdinalIgnoreCase)
+                ? string.Empty
+                : status;
+            if (detail.Length > 72)
+            {
+                detail = detail.Substring(0, 69) + "...";
+            }
+
+            string displayText = string.IsNullOrEmpty(detail) ? prompt : $"{prompt}\n{detail}";
+            float width = Mathf.Clamp(Screen.width * 0.46f, 720f, 1760f);
+            float height = string.IsNullOrEmpty(detail)
+                ? Mathf.Clamp(Screen.height * 0.048f, 42f, 96f)
+                : Mathf.Clamp(Screen.height * 0.078f, 64f, 150f);
+            Rect boxRect = new Rect(Screen.width * 0.5f - width * 0.5f, Screen.height * 0.075f, width, height);
             GUIStyle boxStyle = new GUIStyle(GUI.skin.box)
             {
                 alignment = TextAnchor.MiddleCenter,
-                fontSize = 15,
-                fontStyle = FontStyle.Bold
+                fontSize = string.IsNullOrEmpty(detail)
+                    ? Mathf.RoundToInt(Mathf.Clamp(Screen.height * 0.026f, 20f, 58f))
+                    : Mathf.RoundToInt(Mathf.Clamp(Screen.height * 0.020f, 18f, 44f)),
+                fontStyle = FontStyle.Bold,
+                wordWrap = false
             };
             boxStyle.normal.textColor = new Color(1f, 0.92f, 0.55f, 1f);
-            GUI.Box(boxRect, prompt, boxStyle);
+            Color previousColor = GUI.color;
+            GUI.color = new Color(0.02f, 0.018f, 0.012f, 0.92f);
+            GUI.Box(boxRect, GUIContent.none);
+            GUI.color = previousColor;
+            GUI.Box(boxRect, displayText, boxStyle);
         }
 
         private void HighlightLegalTargets(RuntimeCard card, bool highlighted)
@@ -371,7 +391,6 @@ public partial class GameController
                     : (mulliganPresentation ? MulliganHandPosition(i, hand.Count) : HandPosition(side, i, hand.Count));
                 if (!centerInspect)
                 {
-                    position += FocusedHandHoverOffset(hand, side, i, mulliganPresentation);
                     position += AirborneHandUnitLift(runtimeCard, side, mulliganPresentation);
                     position += PendingOrderHandLift(runtimeCard, side, mulliganPresentation);
                 }
@@ -401,6 +420,11 @@ public partial class GameController
 
         private void RefreshAllViews()
         {
+            if (phase == GamePhase.DeckBuilder)
+            {
+                ClearDeckBuilderInspectState();
+            }
+
             ClearOrphanCenterInspectViews();
             List<CardView> previousViews = new List<CardView>(cardViews);
             reusableCardViews = previousViews;
@@ -518,6 +542,14 @@ public partial class GameController
 
         private void RefreshCenterInspectView()
         {
+            if (centerInspectCard != null && !IsKnownRuntimeCard(centerInspectCard))
+            {
+                centerInspectCard = null;
+                inspectedCard = null;
+                DestroyCenterInspectView();
+                return;
+            }
+
             if (centerInspectCard == null)
             {
                 DestroyCenterInspectView();
@@ -553,6 +585,38 @@ public partial class GameController
                 && pendingAirborneOrder != null
                 && card == pendingAirborneOrder
                 && IsAirborneUnitSelectionActive();
+        }
+
+        private bool IsKnownRuntimeCard(RuntimeCard card)
+        {
+            if (card == null)
+            {
+                return false;
+            }
+
+            if (IsCardInState(player, card) || IsCardInState(enemy, card))
+            {
+                return true;
+            }
+
+            foreach (SlotInteract slot in cardSlots.Values)
+            {
+                if (slot != null && slot.Occupant == card)
+                {
+                    return true;
+                }
+            }
+
+            return pendingAirborneOrder == card || pendingAirborneUnit == card || selectedCard == card;
+        }
+
+        private static bool IsCardInState(PlayerState state, RuntimeCard card)
+        {
+            return state != null
+                && (state.Deck.Contains(card)
+                    || state.Hand.Contains(card)
+                    || state.Discard.Contains(card)
+                    || state.Countermeasures.Contains(card));
         }
 
         private void DestroyCenterInspectView()
@@ -594,6 +658,19 @@ public partial class GameController
             hoveredHandCardId = null;
             DestroyCenterInspectView();
             RefreshSceneInspector();
+        }
+
+        private void ClearDeckBuilderInspectState()
+        {
+            centerInspectCard = null;
+            inspectedCard = null;
+            hoveredHandCardId = null;
+            DestroyCenterInspectView();
+            ClearOrphanCenterInspectViews();
+            if (sceneCardInspector != null)
+            {
+                sceneCardInspector.ShowCard(null);
+            }
         }
 
         private void RefreshSceneDeckSummary()
@@ -690,7 +767,6 @@ public partial class GameController
                     : (mulliganPresentation ? MulliganHandPosition(i, hand.Count) : HandPosition(side, i, hand.Count));
                 if (!centerInspect)
                 {
-                    position += FocusedHandHoverOffset(hand, side, i, mulliganPresentation);
                     position += AirborneHandUnitLift(runtimeCard, side, mulliganPresentation);
                     position += PendingOrderHandLift(runtimeCard, side, mulliganPresentation);
                 }
@@ -816,38 +892,9 @@ public partial class GameController
             return Quaternion.Euler(pitch, yaw, roll);
         }
 
-        private Vector3 FocusedHandHoverOffset(List<RuntimeCard> hand, PlayerSide side, int index, bool mulliganPresentation)
-        {
-            if (side != PlayerSide.Player || mulliganPresentation || IsAirborneUnitSelectionActive() || string.IsNullOrEmpty(hoveredHandCardId))
-            {
-                return Vector3.zero;
-            }
-
-            int hoveredIndex = -1;
-            for (int i = 0; i < hand.Count; i++)
-            {
-                if (hand[i] != null && hand[i].Id == hoveredHandCardId)
-                {
-                    hoveredIndex = i;
-                    break;
-                }
-            }
-
-            if (hoveredIndex < 0 || index <= hoveredIndex)
-            {
-                return Vector3.zero;
-            }
-
-            return Vector3.right * PlayableSceneRules.RevealedHandSpacing;
-        }
-
         private bool IsFocusedPlayerHandCard(PlayerSide side, RuntimeCard card)
         {
-            return side == PlayerSide.Player
-                && card != null
-                && !IsAirborneUnitSelectionActive()
-                && !string.IsNullOrEmpty(hoveredHandCardId)
-                && card.Id == hoveredHandCardId;
+            return false;
         }
 
         private Vector3 AirborneHandUnitLift(RuntimeCard card, PlayerSide side, bool mulliganPresentation)
@@ -955,11 +1002,27 @@ public partial class GameController
         private float ConstrainedPlayerHandZ(bool revealed, float preferredZ, float handPlaneY)
         {
             float halfDepth = PlayableSceneRules.HandCardHeight * PlayableSceneRules.HandCardScale * 0.5f;
+            float cardDepth = PlayableSceneRules.HandCardHeight * PlayableSceneRules.HandCardScale;
             float screenBottomZ = PlayerHandScreenBottomZ(handPlaneY);
-            float maxZ = revealed
-                ? screenBottomZ + halfDepth
-                : screenBottomZ - halfDepth * 0.65f;
-            return Mathf.Min(preferredZ, maxZ);
+            float bottomEdgeSign = PlayerHandBottomEdgeSign(handPlaneY, screenBottomZ, halfDepth);
+            float bottomAlignedZ = screenBottomZ - bottomEdgeSign * halfDepth;
+            return revealed
+                ? bottomAlignedZ
+                : bottomAlignedZ + bottomEdgeSign * cardDepth * PlayableSceneRules.PlayerHandHiddenOffscreenRatio;
+        }
+
+        private float PlayerHandBottomEdgeSign(float handPlaneY, float centerZ, float halfDepth)
+        {
+            Camera mainCamera = Camera.main;
+            if (mainCamera == null)
+            {
+                return -1f;
+            }
+
+            Vector3 center = new Vector3(0f, handPlaneY, centerZ);
+            float forwardY = mainCamera.WorldToScreenPoint(center + Vector3.forward * halfDepth).y;
+            float backY = mainCamera.WorldToScreenPoint(center - Vector3.forward * halfDepth).y;
+            return forwardY < backY ? 1f : -1f;
         }
 
         private float PlayerHandScreenBottomZ(float handPlaneY)
@@ -1220,10 +1283,11 @@ public partial class GameController
         {
             float spacing = PlayableSceneRules.MulliganHandSpacing;
             Vector3 anchor = PlayableSceneRules.MulliganHandAnchor;
+            float offsetIndex = CardLayoutRules.OffsetIndex(index, count);
+
             return anchor
-                + Vector3.right * CardLayoutRules.OffsetIndex(index, count) * spacing
-                + Vector3.up * CardLayoutRules.HandLayerHeightOffset(index)
-                + CameraFollowOffset();
+                + Vector3.right * offsetIndex * spacing
+                + Vector3.up * CardLayoutRules.HandLayerHeightOffset(index);
         }
 
         private Vector3 DeckWorldPosition(PlayerSide side)

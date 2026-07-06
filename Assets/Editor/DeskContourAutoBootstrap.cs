@@ -18,6 +18,13 @@ public static class DeskContourAutoBootstrap
 
     private static void EnsureDesktopQuadBackdrop()
     {
+        if (EditorApplication.isCompiling
+            || EditorApplication.isUpdating
+            || EditorApplication.isPlayingOrWillChangePlaymode)
+        {
+            return;
+        }
+
         GameObject tabletop = GameObject.Find(DesktopQuadName);
         if (tabletop == null)
         {
@@ -27,11 +34,13 @@ public static class DeskContourAutoBootstrap
         DeskContourTerrainGenerator generator = tabletop.GetComponent<DeskContourTerrainGenerator>();
         if (generator == null)
         {
-            generator = Undo.AddComponent<DeskContourTerrainGenerator>(tabletop);
+            Debug.LogWarning("[DeskContourBootstrap] DesktopQuad has no DeskContourTerrainGenerator. Use Frontier/Desk Contour menu actions to add or rebuild it.");
+            return;
         }
 
-        generator.ApplyDarkBottomWhiteLineTabletopPreset();
-        Debug.Log("[DeskContourBootstrap] Auto-applied dark-bottom white-line backdrop to DesktopQuad.");
-        EditorUtility.SetDirty(tabletop);
+        if (!generator.IsTablePresetApplied)
+        {
+            Debug.LogWarning("[DeskContourBootstrap] DesktopQuad contour preset is not marked as applied. Use Frontier/Desk Contour menu actions to apply it explicitly.");
+        }
     }
 }

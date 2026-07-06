@@ -7,7 +7,6 @@ public class CardView : MonoBehaviour
     private const float CardHeight = PlayableSceneRules.HandCardHeight;
     private const float CardWidth = PlayableSceneRules.HandCardWidth;
     private const float BoardCardSize = PlayableSceneRules.BoardCardSize;
-    private const bool UsePrefabVisualsInPlayMode = true;
     private const float DragStartThresholdPixels = 18f;
     private const float DragStartHoldSeconds = 0.02f;
     private const float DraggedHandCardMaxPointerOffsetX = 0.56f;
@@ -117,7 +116,7 @@ public class CardView : MonoBehaviour
 
     public void Refresh()
     {
-        if (card == null || label == null)
+        if (card == null)
         {
             return;
         }
@@ -125,8 +124,11 @@ public class CardView : MonoBehaviour
         ApplyDefaultPresentation();
         bool shouldHideFaceText = isHidden || card.Owner == PlayerSide.Enemy && card.Zone == CardZone.Hand;
         SetHandDetailPanelsVisible(!IsHandCard());
-        label.text = isHidden ? HiddenCardText() : BuildCardText();
-        SetTextVisible(label, !shouldHideFaceText && !IsHandCard());
+        if (label != null)
+        {
+            label.text = isHidden ? HiddenCardText() : BuildCardText();
+            SetTextVisible(label, !shouldHideFaceText && !IsHandCard());
+        }
         if (costLabel != null)
         {
             costLabel.text = shouldHideFaceText ? string.Empty : DisplayKreditCostText();
@@ -215,6 +217,11 @@ public class CardView : MonoBehaviour
 
     private void SetHandDetailPanelsVisible(bool visible)
     {
+        if (prefabTemplate != null)
+        {
+            return;
+        }
+
         SetTextPanelVisible(label, visible);
         SetTextPanelVisible(statusLabel, visible);
     }
@@ -571,6 +578,7 @@ public class CardView : MonoBehaviour
         {
             operationBadgeRenderer.enabled = card.Type == CardType.Unit;
         }
+
     }
 
     public void SetRevealedHandPresentation()
@@ -835,7 +843,6 @@ public class CardView : MonoBehaviour
 
         hasLayout = true;
     }
-
     private void LateUpdate()
     {
         UpdateHandBillboard();
@@ -1359,12 +1366,8 @@ public class CardView : MonoBehaviour
 
         isHovered = hoveredNow;
         SetHoverFrameVisible(hoveredNow);
-        motion?.SetHovered(hoveredNow);
-        if (hoveredNow)
-        {
-            HoldPlayerHandOpen(true);
-        }
-        else if (CardInteractionRules.ShouldReleasePlayerHandHold(isDragging) && !isSelected)
+        motion?.SetHovered(hoveredNow && !IsHandCard());
+        if (!hoveredNow && CardInteractionRules.ShouldReleasePlayerHandHold(isDragging) && !isSelected)
         {
             HoldPlayerHandOpen(false);
         }
@@ -1711,11 +1714,6 @@ public class CardView : MonoBehaviour
 
     private bool TryBuildVisualsFromPrefab(bool hidden)
     {
-        if (!UsePrefabVisualsInPlayMode)
-        {
-            return false;
-        }
-
         string resourcePath = CardPrefabResourcePath();
         CardPrefabTemplate prefab = Resources.Load<CardPrefabTemplate>(resourcePath);
         if (prefab == null)
@@ -1752,6 +1750,7 @@ public class CardView : MonoBehaviour
         defenseBadgeLabel = prefabTemplate.defenseBadgeLabel;
         statusLabel = prefabTemplate.statusLabel;
         selectionLabel = prefabTemplate.selectionLabel;
+        BindMissingPrefabTextLabels();
 
         ClearPrefabDefaultArtwork();
 
@@ -1820,7 +1819,7 @@ public class CardView : MonoBehaviour
     {
         if (primaryArtRenderer != null)
         {
-            SetEditableMaterial(primaryArtRenderer, CreateRuntimeTextureMaterial(Color.white));
+            SetEditableMaterial(primaryArtRenderer, CreateRuntimeTextureMaterial(new Color(0.08f, 0.095f, 0.11f, 1f)));
         }
 
         if (blurredFrameRenderer != null)
@@ -1867,6 +1866,60 @@ public class CardView : MonoBehaviour
             if (nested != null)
             {
                 return nested;
+            }
+        }
+
+        return null;
+    }
+
+    private void BindMissingPrefabTextLabels()
+    {
+        if (prefabTemplate == null)
+        {
+            return;
+        }
+
+        if (attackLabel == null)
+        {
+            attackLabel = FindPrefabText("AttackNumber", "AttackValue", "AttackBadge");
+        }
+
+        if (defenseLabel == null)
+        {
+            defenseLabel = FindPrefabText("DefenseNumber", "DefenseValue", "DefenseBadge", "DefenceBadge");
+        }
+
+        if (costLabel == null)
+        {
+            costLabel = FindPrefabText("CostNumber");
+        }
+
+        if (operationLabel == null)
+        {
+            operationLabel = FindPrefabText("OperationNumber");
+        }
+    }
+
+    private TMP_Text FindPrefabText(params string[] candidateNames)
+    {
+        for (int i = 0; i < candidateNames.Length; i++)
+        {
+            Transform candidate = FindChildRecursive(prefabTemplate.transform, candidateNames[i]);
+            if (candidate == null)
+            {
+                continue;
+            }
+
+            TMP_Text directText = candidate.GetComponent<TMP_Text>();
+            if (directText != null)
+            {
+                return directText;
+            }
+
+            TMP_Text childText = candidate.GetComponentInChildren<TMP_Text>(true);
+            if (childText != null)
+            {
+                return childText;
             }
         }
 

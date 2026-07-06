@@ -1,4 +1,7 @@
 using System;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 using UnityEngine;
 
 [ExecuteAlways]
@@ -91,6 +94,7 @@ public class DeskContourTerrainGenerator : MonoBehaviour
 
     [Header("Behavior")]
     [SerializeField] private bool autoRegenerate = false;
+    [SerializeField] private bool logDiagnostics = false;
     [SerializeField] private ContourStyle contourStyle = ContourStyle.ReferenceMatch;
 
     private float[] heightField;
@@ -106,6 +110,9 @@ public class DeskContourTerrainGenerator : MonoBehaviour
     [SerializeField, HideInInspector] private int latestSeed = 12345;
     [SerializeField, HideInInspector] private bool latestSeedInitialized = false;
     private bool isGenerating;
+#if UNITY_EDITOR
+    private bool editorGenerateQueued;
+#endif
 
     public bool IsTablePresetApplied => tablePresetApplied;
     public bool HasGeneratedTexture => generatedTexture != null;
@@ -149,9 +156,35 @@ public class DeskContourTerrainGenerator : MonoBehaviour
 
         if (autoRegenerate && !isGenerating && !Application.isPlaying)
         {
-            Generate();
+            QueueEditorGenerate();
         }
     }
+
+#if UNITY_EDITOR
+    private void QueueEditorGenerate()
+    {
+        if (editorGenerateQueued)
+        {
+            return;
+        }
+
+        editorGenerateQueued = true;
+        EditorApplication.delayCall += () =>
+        {
+            editorGenerateQueued = false;
+            if (this == null || Application.isPlaying || isGenerating)
+            {
+                return;
+            }
+
+            Generate();
+        };
+    }
+#else
+    private void QueueEditorGenerate()
+    {
+    }
+#endif
 
     [ContextMenu("Generate Contour Map")]
     public void Generate()
@@ -1833,12 +1866,15 @@ public class DeskContourTerrainGenerator : MonoBehaviour
 
         generatedTexture.SetPixels(pixels);
         generatedTexture.Apply(false, false);
-        if (contourStyle == ContourStyle.ReferenceMatchBackdrop)
+        if (logDiagnostics && contourStyle == ContourStyle.ReferenceMatchBackdrop)
         {
             float pixelCount = resolution * (float)resolution;
             Debug.Log($"[DeskContour] Backdrop line coverage: avgSignal={backdropLineCoverage / pixelCount:F4}, avgMask={backdropLineIntensity / pixelCount:F4}, strongPixelRatio={backdropLinePixelCount / pixelCount:F4}");
         }
-        Debug.Log($"[DeskContour] Generated texture stats: minRGB={minOutputChannel:F4}, maxRGB={maxOutputChannel:F4}, maxSample={maxContour:F4}");
+        if (logDiagnostics)
+        {
+            Debug.Log($"[DeskContour] Generated texture stats: minRGB={minOutputChannel:F4}, maxRGB={maxOutputChannel:F4}, maxSample={maxContour:F4}");
+        }
         return generatedTexture;
     }
 
@@ -1974,9 +2010,12 @@ public class DeskContourTerrainGenerator : MonoBehaviour
         RepairTabletopBackdropMaterialState();
         ApplyBackdropForegroundState(generatedMaterial, forceOpaqueBackdrop);
         ApplyBackdropVisibilityHardening(renderer, generatedMaterial, forceOpaqueBackdrop);
-        Debug.Log($"[DeskContour] ApplyTexture finished: {name}, style={contourStyle}, shader={sourceMaterial.shader.name}, queue={sourceMaterial.renderQueue}, texRes={texture.width}x{texture.height}");
+        if (logDiagnostics)
+        {
+            Debug.Log($"[DeskContour] ApplyTexture finished: {name}, style={contourStyle}, shader={sourceMaterial.shader.name}, queue={sourceMaterial.renderQueue}, texRes={texture.width}x{texture.height}");
+        }
 
-        if (forceOpaqueBackdrop)
+        if (logDiagnostics && forceOpaqueBackdrop)
         {
             float? texAlpha = null;
             if (generatedTexture != null)

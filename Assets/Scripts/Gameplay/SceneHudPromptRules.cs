@@ -9,14 +9,19 @@ public static class SceneHudPromptRules
         PlayerSide activeSide,
         bool mulliganUsed)
     {
-        if (selectedCard != null)
-        {
-            return CompactSelectedPrompt(selectedCard, availableKredits, hasFrontlineController, frontlineController);
-        }
-
         if (phase == GamePhase.Mulligan)
         {
             return SceneGuidanceRules.OpeningHandPrompt(mulliganUsed);
+        }
+
+        if (phase != GamePhase.PlayerTurn || activeSide != PlayerSide.Player)
+        {
+            return SceneGuidanceRules.ActionPrompt(phase, activeSide);
+        }
+
+        if (selectedCard != null)
+        {
+            return CompactSelectedPrompt(selectedCard, availableKredits, hasFrontlineController, frontlineController);
         }
 
         return SceneGuidanceRules.ActionPrompt(phase, activeSide);

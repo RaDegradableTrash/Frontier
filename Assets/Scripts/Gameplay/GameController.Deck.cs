@@ -98,8 +98,10 @@ public partial class GameController
             CancelAllCardPointerInteractions();
             phase = GamePhase.PlayerTurn;
             activeSide = PlayerSide.Player;
+            playerHandRevealGraceUntil = Mathf.Min(playerHandRevealGraceUntil, Time.time);
+            SetPlayerHandRevealed(false);
             SetStatus($"Mulligan replaced {markedCards.Count} card(s). Your turn.");
-            RefreshSceneStatus();
+            RefreshAllViews();
         }
 
         private void PlayMulliganDiscardFlights(List<RuntimeCard> discardedCards, Dictionary<string, Vector3> startPositions)
@@ -188,6 +190,8 @@ public partial class GameController
             ClearAllCardViews();
             ClearSelection();
             ClearRuntimeCards();
+            CancelAllCardPointerInteractions();
+            ClearDraggedHandCardIfNeeded(false);
             player.HeadquartersHealth = 20;
             enemy.HeadquartersHealth = 20;
             player.MaxKredits = 0;
@@ -198,6 +202,10 @@ public partial class GameController
             mulliganMarkedIds.Clear();
             ClearCardInspectState();
             hasFrontlineController = false;
+            playerHandRevealGraceUntil = Mathf.Min(playerHandRevealGraceUntil, Time.time);
+            SetPlayerHandRevealed(false);
+            selectedEnemyDeck = DeckArchetype.Endfield;
+            BuildDecks();
             SetGamePhase(GamePhase.DeckBuilder);
             SetStatus("Choose a starter deck, then start the match.");
             RefreshAllViews();
@@ -206,6 +214,7 @@ public partial class GameController
         private void ClearRuntimeCards()
         {
             inspectedCard = null;
+            centerInspectCard = null;
             pendingAirborneOrder = null;
             pendingAirborneUnit = null;
             pendingAirborneSlot = null;
@@ -235,6 +244,7 @@ public partial class GameController
         private void BuildDecks()
         {
             inspectedCard = null;
+            centerInspectCard = null;
             resolutionEvents.Clear();
             isResolvingEvents = false;
             actionLog.Clear();
@@ -524,12 +534,17 @@ public partial class GameController
         {
             for (int i = 0; i < openingHandSize; i++)
             {
-                DrawCard(player);
-                DrawCard(enemy);
+                DrawCardInternal(player, false);
+                DrawCardInternal(enemy, false);
             }
         }
 
         private void DrawCard(PlayerState state)
+        {
+            DrawCardInternal(state, true);
+        }
+
+        private void DrawCardInternal(PlayerState state, bool animate)
         {
             if (state.Deck.Count == 0 || state.Hand.Count >= 9)
             {
@@ -538,10 +553,15 @@ public partial class GameController
 
             RuntimeCard card = state.Deck[0];
             state.Deck.RemoveAt(0);
-            AddCardToHand(state, card);
+            AddCardToHandInternal(state, card, animate);
         }
 
         private void AddCardToHand(PlayerState state, RuntimeCard card)
+        {
+            AddCardToHandInternal(state, card, true);
+        }
+
+        private void AddCardToHandInternal(PlayerState state, RuntimeCard card, bool animate)
         {
             if (state == null || card == null || state.Hand.Count >= 9)
             {
@@ -551,6 +571,11 @@ public partial class GameController
             card.Zone = CardZone.Hand;
             int handIndex = state.Hand.Count;
             state.Hand.Add(card);
+            if (!animate)
+            {
+                return;
+            }
+
             pendingDrawAnimations.Add(new PendingDrawAnimation
             {
                 CardId = card.Id,
